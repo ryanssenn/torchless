@@ -2,34 +2,41 @@
 
 Torchless is a custom-built LLM inference engine written entirely from scratch (yes, coded and tested entirely by hand). It currently runs [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1) on CPU for local text completion.
 
-The goal of this project is to reach maximum inference speed and support the newest [Mistral 3](https://mistral.ai/news/mistral-3) architectures.
+The goal of this project is to build a light and fast runtime for [Mistral 3](https://mistral.ai/news/mistral-3) architectures.
 
 <br>
 
-![demo](https://github.com/user-attachments/assets/5a18f975-5e4e-407d-9a9b-10b6d2b42c1f)
+![demo2](https://github.com/user-attachments/assets/1711dc3e-9ab2-4f73-8c35-b7ac3aabec55)
 
+# Status
+
+next
+
+- Rewrite of slow code sections
+- SIMD
+- Support [Ministral 3 3B](https://huggingface.co/mistralai/Ministral-3-3B-Reasoning-2512)
+- CUDA kernels
+- CLI
 
 ## How it works
 
-If you are new to LLM internals, an inference engine is essentially a loop that predicts the next word in a sequence, adds it to the history, and repeats. Here is the exact lifecycle of a prompt inside Torchless.
+If you are new to LLM internals, an inference engine is essentially a loop that predicts the next word in a sequence, adds it to the history, and repeats. Here is the exact lifecycle of a prompt:
 
 ### Loading
 Before we can run any math, we need the weights. The `export_mistral.py` script takes the complex Hugging Face folder structure and packs the weights into a single standardized binary file. The C++ engine loads this entire file into RAM at startup so the data is mapped and ready for computation.
 
 ### Tokenization
-The model performs math on numbers, not strings. When you type a prompt like "Paris is", the **Tokenizer** breaks it down using Byte-Pair Encoding (BPE). It looks up these chunks in the Mistral vocabulary and converts them into a list of integer IDs (e.g. `[1, 782, 312]`).
+The model performs math on numbers, not strings. When you type a prompt like "Paris is", the `tokenizer` breaks it down using byte-pair Encoding (BPE). It looks up these chunks in the Mistral vocabulary and converts them into a list of integer IDs (e.g. [1, 782, 312]).
 
 ### Transformer Loop
 We feed these IDs into the model one by one. The goal is to update a single vector, the `hidden_state`, as it passes through the network.
 
-* **Embedding:** We take the input token ID and look up its specific floating-point vector in the embedding table. This turns a simple integer into a dense vector representing the token's initial semantic meaning.
-* **Layers:** This state travels through 32 identical layers. In every layer, we first apply **RMSNorm** to stabilize the numbers. Then the state enters the **Attention** module. It projects the state into Query, Key, and Value vectors. The Query "looks back" at the Keys of previous tokens to find relevant information (Values). We apply **RoPE** (Rotary Positional Embeddings) so the model understands relative distance between words, then store the Key and Value in the **KV Cache**. This cache acts as the model's short-term memory, saving us from recalculating the history for every new word.
-* **MLP:** Finally, the state goes through the **Feedforward** module (a SwiGLU block). If Attention gathers context from the past, the MLP processes that information. It projects the vector to a higher dimension (14,336) to untangle complex relationships, applies a non-linear activation (SiLU), and projects it back down.
+* **Embedding:** We take the input `token ID`and look up its specific floating-point vector in the embedding table. This turns a simple integer into a dense vector representing the token's initial semantic meaning.
+* **Layers:** This state travels through 32 identical layers. In every layer, we first apply `RMSNorm` to stabilize the numbers. Then the state enters the `attention` module. It projects the state into `query`, `key`, and `value` vectors. The query "looks back" at the Keys of previous tokens to find relevant information (values). We apply `RoPE` (Rotary Positional Embeddings) so the model understands relative distance between words, then store the key and value in the `KV Cache`. This cache acts as the model's short-term memory, saving us from recalculating the history for every new word.
+* **MLP:** Finally, the state goes through the `feedforward` module (a SwiGLU block). If Attention gathers context from the past, the MLP processes that information. It projects the vector to a higher dimension (14,336) to untangle complex relationships, applies a non-linear activation (SiLU), and projects it back down.
 
 ### Prediction
-After 32 layers of processing, the final `hidden_state` holds the "meaning" of the next predicted token. We project this vector against the entire vocabulary to get **logits** raw confidence scores for all 32,000 possible next tokens. We run a **softmax** operation to turn these scores into probabilities and **sample** the result (either choosing the most likely token or picking randomly based on the probability distribution). We decode that ID back into text, print it, and feed it back into the transformer.
-
-
+After 32 layers of processing, the final `hidden_state` holds the "meaning" of the next predicted token. We project this vector against the entire vocabulary to get `logits` raw confidence scores for all 32,000 possible next tokens. We run a `softmax` operation to turn these scores into probabilities and `sample` the result (either choosing the most likely token or picking randomly based on the probability distribution). We decode that ID back into text, print it, and feed it back into the transformer.
 
 
 # Running
@@ -75,15 +82,6 @@ cmake --build .
 ```
 
 If you run into issues that appear specific to your environment, feel free to open a GitHub issue.
-
-# Current Focus
-
-The initial phase of the project focused on correctness and building the necessary backend infrastructure for completing an inference pass. This involved a lot of pain as well as implementing a model loader, tensor/math utilities, tokenizer, transformer architecture and verifying everything against Hugging Face.
-
-Current development focuses on performance optimization and model expansion:
-- Ongoing rewrite of slow code sections
-- Implementing CPU SIMD instructions and custom CUDA kernels (primary focus)
-- Supporting [Ministral 3 3B](https://huggingface.co/mistralai/Ministral-3-3B-Reasoning-2512)
 
 # Resources
 
@@ -159,8 +157,8 @@ The architecture *(src/model/mistral/modules.cpp)* is broken into independent C+
 ## Gotta go fast
 
 ### Quantization
-- [ ] Support fp8 with a cast `tensor.to(torch.float8_e5m2)` during model export
-- [x] **Per-group symmetric quantization** - splits tensor into groups, for each group, finds max abs value, computes scale and produces quantized weights
+- [ ] Support fp8 with a cast during model export
+- [x] Q8_K Per-group symmetric quantization - split tensor into groups, for each group, finds max abs value, computes scale and produces quantized weights
 
 ### CPU Multithreading
 - [ ] Todo
