@@ -1,31 +1,81 @@
 #include "parameters.h"
 #include <iostream>
-
-#include <fcntl.h>     // declares open()
-#include <unistd.h>    // declares close()
-#include <sys/mman.h>  // declares mmap()
+#include <fcntl.h>
 #include <sys/stat.h>
 
-// Memory-map the model file into virtual address space and return base pointer.
-void* Parameters::map_file(int fd){
-    // Get the size of the binary file
+#ifdef _WIN32
+    #include <windows.h>
+    #include <io.h>
+    // Map POSIX names to MSVC
+    #define open  _open
+    #define read  _read
+    #define close _close
+    #define fstat _fstat
+    #define stat  _stat
+#else
+    #include <unistd.h>
+    #include <sys/mman.h>
+#endif
+
+void* Parameters::map_file(int fd) {
+#ifdef _WIN32
+    HANDLE hFile = (HANDLE)_get_osfhandle(fd);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        std::cerr << "Model binary get HANDLE failed" << std::endl;
+        std::exit(1);
+    }
+
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(hFile, &size)) {
+        std::cerr << "Model binary get size failed" << std::endl;
+        std::exit(1);
+    }
+
+    HANDLE hMap = CreateFileMappingA(
+        hFile,
+        nullptr,
+        PAGE_READONLY,
+        0, 0,
+        nullptr
+    );
+    if (!hMap) {
+        std::cerr << "Model CreateFileMapping failed" << std::endl;
+        std::exit(1);
+    }
+
+    void* p = MapViewOfFile(
+        hMap,
+        FILE_MAP_READ,
+        0, 0,
+        0
+    );
+
+    CloseHandle(hMap);
+
+    if (!p) {
+        std::cerr << "Model MapViewOfFile failed" << std::endl;
+        std::exit(1);
+    }
+
+    return p;
+
+#else
     struct stat st;
-    if (fstat(fd, &st) < 0){
+    if (fstat(fd, &st) < 0) {
         std::cerr << "Model binary get size failed" << std::endl;
         std::exit(1);
     }
 
     size_t size = st.st_size;
 
-    // Load the file into virtual memory
-    void* p = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-
-    if (p == MAP_FAILED){
+    void* p = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (p == MAP_FAILED) {
         std::cerr << "Model mmap failed" << std::endl;
         std::exit(1);
     }
 
     return p;
+#endif
 }
 
 // Extract model hyperparameters from JSON header into a Config struct.
