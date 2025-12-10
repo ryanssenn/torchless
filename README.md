@@ -58,13 +58,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-#### Export the model with 8-bit quantization
-
+#### Export the model with quantization
 ```
 python3 export_mistral.py \
   --model_dir ../Mistral-7B-v0.1 \
   --out ./mistral.bin \
-  --quant f32
+  --quant <int8|f32>
 ```
 
 #### Compile project
