@@ -2,10 +2,16 @@
 #include "src/loader/parameters.h"
 #include "src/model/mistral/modules.h"
 #include <random>
+#include <chrono>
 
 std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_real_distribution<double> distr(0.0, 1.0);
+
+uint64_t get_timestamp_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+}
 
 uint32_t sample_max(InferenceState& infer){
     float max_val = infer.logits.data[0];
@@ -64,19 +70,32 @@ int main(int argc, char** argv) {
     Model<float> model(params);
 
     const std::string text = argv[2];
+
     std::vector<uint32_t> got = params->tokenizer.encode(text);
 
     for (int i=0;i<got.size()-1;i++){
         model.forward(infer, got[i]);
     }
 
+    uint64_t start_time = get_timestamp_ms();
+
     uint32_t t = got[got.size()-1];
-    for (int i = 0; i<50;i++){
+    int i = 0;
+    for (;i<200;i++){
         t = generate(model, infer, t);
+
+        if (t == 2){
+            break;
+        }
+
         std::cout << params->tokenizer.decode({t}) << std::flush;
     }
 
     std::cout << std::endl;
+
+    uint64_t end_time = get_timestamp_ms();
+
+    std::cout << "throughput: " << (i+1) / ((end_time - start_time) / 1000.0) << "tok/s" << std::endl;
 
     return 0;
 }
