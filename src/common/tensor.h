@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <cassert>
+#include <memory>
 
 struct Arena {
     size_t BUFFER_SIZE;

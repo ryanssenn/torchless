@@ -48,32 +48,17 @@ uint32_t sample_multinomial(InferenceState& infer, float temp){
     return infer.probs.numel - 1;
 }
 
-// Update generate to use sampling
 template <typename T>
 uint32_t generate(Model<T>& model, InferenceState& infer, size_t token){
     model.forward(infer, token);
     return sample_multinomial(infer, 0.0f);
 }
 
-int main(int argc, char** argv) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <model_path> <prompt>" << std::endl;
-        return 1;
-    }
+template <typename T>
+void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, const std::vector<uint32_t>& got) {
+    Model<T> model(params);
 
-    std::string model_path = argv[1];
-
-    std::shared_ptr<Parameters> params = std::make_shared<Parameters>();
-    params->load_parameters(model_path);
-
-    InferenceState infer(params->config);
-    Model<float> model(params);
-
-    const std::string text = argv[2];
-
-    std::vector<uint32_t> got = params->tokenizer.encode(text);
-
-    for (int i=0;i<got.size()-1;i++){
+    for (int i=0; i<got.size()-1; i++){
         model.forward(infer, got[i]);
     }
 
@@ -96,6 +81,28 @@ int main(int argc, char** argv) {
     uint64_t end_time = get_timestamp_ms();
 
     std::cout << "throughput: " << (i+1) / ((end_time - start_time) / 1000.0) << "tok/s" << std::endl;
+}
+
+int main(int argc, char** argv) {
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <model_path> <prompt>" << std::endl;
+        return 1;
+    }
+
+    std::string model_path = argv[1];
+
+    std::shared_ptr<Parameters> params = std::make_shared<Parameters>();
+    params->load_parameters(model_path);
+
+    InferenceState infer(params->config);
+    const std::string text = argv[2];
+    std::vector<uint32_t> got = params->tokenizer.encode(text);
+
+    if (params->config.quant == "int8") {
+        run_inference<int8_t>(params, infer, got);
+    } else if (params->config.quant == "float") {
+        run_inference<float>(params, infer, got);
+    }
 
     return 0;
 }
