@@ -10,7 +10,9 @@ The goal of this project is to build a light and fast runtime for [Mistral 3](ht
 
 # Status
 
-next
+Improving the quality of the C++ code  
+
+next  
 
 - Rewrite of slow code sections
 - SIMD

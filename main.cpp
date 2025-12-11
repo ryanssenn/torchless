@@ -97,10 +97,9 @@ int main(int argc, char** argv) {
     InferenceState infer(params->config);
     const std::string text = argv[2];
     std::vector<uint32_t> got = params->tokenizer.encode(text);
-
     if (params->config.quant == "int8") {
         run_inference<int8_t>(params, infer, got);
-    } else if (params->config.quant == "float") {
+    } else if (params->config.quant == "f32") {
         run_inference<float>(params, infer, got);
     }
 
