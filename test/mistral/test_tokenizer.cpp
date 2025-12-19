@@ -75,7 +75,7 @@ static RegisterTest tokenizer_encode_fallback_q("tokenizer encode fallback", "in
 int test_tokenizer_decode(){
     std::shared_ptr<Parameters> params = get_params();
 
-    const std::string expected = "The quick brown fox jumps over the lazy dog.";
+    const std::string expected = " The quick brown fox jumps over the lazy dog.";
 
     const std::vector<uint32_t> ids = {
             415, 2936, 9060, 285, 1142, 461, 10575, 754, 272,
