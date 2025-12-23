@@ -1,6 +1,6 @@
 # Torchless
 
-Torchless is a custom-built LLM inference engine written entirely from scratch (yes, coded and tested entirely by hand). It currently runs [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1) on CPU for local text completion.
+Torchless is a custom-built LLM inference engine written entirely from scratch. It currently runs [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1) on CPU for local text completion.
 
 <br>
 
@@ -10,12 +10,15 @@ I am building this project to learn C++, performance engineering and LLM interna
 
 # Status
 
-next
+Next
 
 - Rewrite of slow code sections
-- SIMD
 - Support [Ministral 3 3B](https://huggingface.co/mistralai/Ministral-3-3B-Reasoning-2512)
-- CLI
+
+Make it super fast with
+- SIMD
+- Quantization algorithms
+- CUDA
 
 ## How it works
 

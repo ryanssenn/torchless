@@ -1,50 +1,6 @@
 #include <math.h>
-#include <avxintrin.h>
 #include "../../common/kernels.h"
 
-
-void matmul(Tensor<float>& xout, Tensor<float>& w, Tensor<float>& x) {
-    size_t n = w.shape[0];
-    size_t d = w.shape[1];
-
-    assert(x.numel == d && xout.numel >= n && "matmul shape mismatch");
-
-#pragma omp parallel for
-    for (size_t i = 0; i < n; i++) {
-        const float* w_row = w.data + i * d;
-        const float* x_ptr = x.data;
-
-        // Accumulator: 8 partial sums
-        __m256 sum = _mm256_setzero_ps();
-
-        // Process 8 elements at a time
-        size_t j = 0;
-        for (; j + 8 <= d; j += 8) {
-            __m256 w_vec = _mm256_loadu_ps(w_row + j);
-            __m256 x_vec = _mm256_loadu_ps(x_ptr + j);
-            sum = _mm256_fmadd_ps(w_vec, x_vec, sum);  // sum += w * x
-        }
-
-        // Horizontal sum of the 8 floats in sum
-        // [a b c d | e f g h] -> reduce to single float
-        __m128 lo = _mm256_castps256_ps128(sum);        // [a b c d]
-        __m128 hi = _mm256_extractf128_ps(sum, 1);      // [e f g h]
-        __m128 sum128 = _mm_add_ps(lo, hi);             // [a+e b+f c+g d+h]
-        __m128 shuf = _mm_movehdup_ps(sum128);          // [b+f b+f d+h d+h]
-        __m128 sums = _mm_add_ps(sum128, shuf);         // [a+e+b+f ... ]
-        shuf = _mm_movehl_ps(shuf, sums);               // move high to low
-        sums = _mm_add_ss(sums, shuf);                  // final sum in lowest element
-
-        float result = _mm_cvtss_f32(sums);
-
-        // Handle remaining elements (d not divisible by 8)
-        for (; j < d; j++) {
-            result += w_row[j] * x_ptr[j];
-        }
-
-        xout.data[i] = result;
-    }
-}
 
 // W (n,d) @ x (d,) = xout (n,)
 void matmul(Tensor<float>& xout, Tensor<float>& w, Tensor<float>& x){
