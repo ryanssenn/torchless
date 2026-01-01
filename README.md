@@ -43,13 +43,11 @@ After 32 layers of processing, the final `hidden_state` holds the "meaning" of t
 
 # Running
 
-#### Download Mistral 7B v0.1, Torchless and nhlohmann JSON library
+#### Download Mistral 7B v0.1, Torchless
 
 ```
 git clone https://huggingface.co/mistralai/Mistral-7B-v0.1
 git clone https://github.com/ryanssenn/torchless.git
-cd torchless
-curl -L https://raw.githubusercontent.com/nlohmann/json/develop/single_include/nlohmann/json.hpp -o src/common/json.hpp
 ```
 
 #### (Optional) Create Python virtual environment and download libraries

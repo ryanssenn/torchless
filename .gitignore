@@ -3,7 +3,6 @@ changes.txt
 model.bin
 .idea/
 cmake-build-debug/
-include/json.hpp
 __pycache__/
 venv
 scripts/test/output.txt

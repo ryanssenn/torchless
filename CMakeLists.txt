@@ -16,7 +16,7 @@ endif()
 file(GLOB_RECURSE SRC CONFIGURE_DEPENDS "src/*.cpp")
 file(GLOB_RECURSE TEST_MISTRAL CONFIGURE_DEPENDS "test/mistral/*.cpp")
 
-add_executable(torchless main.cpp ${SRC})
+add_executable(torchless src/main.cpp ${SRC})
 add_executable(test_exec ${SRC} ${TEST_MISTRAL})
 
 if(NOT APPLE)
