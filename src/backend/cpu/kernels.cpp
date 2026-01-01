@@ -24,11 +24,53 @@ void matmul(Tensor<float>& xout, Tensor<int8_t>& w, Tensor<float>& x){
 
     assert(x.numel == d && xout.numel >= n && "matmul shape mismatch");
 
+    // Group size for quantization (64 elements per scale)
+    constexpr size_t GROUP_SIZE = 64;
+    const size_t num_groups = d / GROUP_SIZE;
+    
+    #pragma omp parallel for
     for (int i=0; i<n; i++){
-        xout.data[i] = 0;
-        for (int j=0; j<d; j++){
-            xout.data[i] += w.get(i*d+j) * x.data[j];
+        float sum = 0.0f;
+        size_t w_offset = i * d;
+        
+        // Process each group (64 elements share the same scale)
+        for (size_t g=0; g<num_groups; g++){
+            size_t group_start = g * GROUP_SIZE;
+            size_t scale_idx = (w.scales.size() * (w_offset + group_start)) / w.numel;
+            float scale = w.scales[scale_idx];
+            
+            // Direct dequantization: w.data[i] / scale (avoiding w.get() overhead)
+            // Unroll loop for better performance
+            float inv_scale = 1.0f / scale;
+            size_t j = group_start;
+            size_t group_end = group_start + GROUP_SIZE;
+            if (group_end > d) group_end = d;
+            
+            // Process 4 elements at a time for better instruction-level parallelism
+            for (; j + 4 <= group_end; j += 4){
+                float dequant0 = w.data[w_offset + j] * inv_scale;
+                float dequant1 = w.data[w_offset + j + 1] * inv_scale;
+                float dequant2 = w.data[w_offset + j + 2] * inv_scale;
+                float dequant3 = w.data[w_offset + j + 3] * inv_scale;
+                sum += dequant0 * x.data[j] + dequant1 * x.data[j + 1] + 
+                       dequant2 * x.data[j + 2] + dequant3 * x.data[j + 3];
+            }
+            
+            // Handle remaining elements
+            for (; j < group_end; j++){
+                float dequant = w.data[w_offset + j] * inv_scale;
+                sum += dequant * x.data[j];
+            }
         }
+        
+        // Handle remaining elements if d is not a multiple of GROUP_SIZE
+        size_t remaining_start = num_groups * GROUP_SIZE;
+        for (size_t j = remaining_start; j < d; j++){
+            // Need to get scale for this element
+            sum += w.get(w_offset + j) * x.data[j];
+        }
+        
+        xout.data[i] = sum;
     }
 }
 

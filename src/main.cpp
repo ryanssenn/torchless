@@ -66,10 +66,18 @@ void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, co
 
     uint32_t t = got[got.size()-1];
     int i = 0;
-    for (;i<200;i++){
+    
+    // Get EOS token ID (</s> for Mistral), fallback to 2 if not found
+    uint32_t eos_token_id = 2;  // Default fallback
+    auto eos_it = params->tokenizer.token_to_id.find("</s>");
+    if (eos_it != params->tokenizer.token_to_id.end()) {
+        eos_token_id = eos_it->second;
+    }
+    
+    for (;i<50;i++){
         t = generate(model, infer, t);
 
-        if (t == 2){
+        if (t == eos_token_id){
             break;
         }
 

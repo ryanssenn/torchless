@@ -64,7 +64,7 @@ pip install -r requirements.txt
 python3 export_mistral.py \
   --model_dir ../Mistral-7B-v0.1 \
   --out ./mistral.bin \
-  --quant f32
+  --quant int8
 ```
 
 #### Compile project

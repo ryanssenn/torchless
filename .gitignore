@@ -11,3 +11,5 @@ mistral-int8.bin
 .DS_Store
 cmake-build-release-system/
 cmake-build-release/
+.gitignore
+output.txt
