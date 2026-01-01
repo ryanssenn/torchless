@@ -1,8 +1,8 @@
 #include <unordered_map>
 #include <string>
-#include "../common/tensor.h"
-#include "../tokenizer/tokenizer.h"
-#include "../common/json.hpp"
+#include "tensor.h"
+#include "tokenizer.h"
+#include "json.hpp"
 #include <variant>
 
 #pragma once

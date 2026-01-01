@@ -1,6 +1,6 @@
 #pragma once
-#include "../../common/tensor.h"
-#include "../../loader/parameters.h"
+#include "tensor.h"
+#include "parameters.h"
 
 inline size_t MAX_SEQ_LEN = 500;
 

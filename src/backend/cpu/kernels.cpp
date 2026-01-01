@@ -1,5 +1,5 @@
 #include <math.h>
-#include "../../common/kernels.h"
+#include "../../../include/kernels.h"
 
 
 // W (n,d) @ x (d,) = xout (n,)

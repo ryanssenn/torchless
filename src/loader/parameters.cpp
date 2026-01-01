@@ -1,4 +1,4 @@
-#include "parameters.h"
+#include "../../include/parameters.h"
 #include <iostream>
 
 #include <fcntl.h>     // declares open()
@@ -54,7 +54,6 @@ void Parameters::load_tensor(std::unordered_map<std::string, std::variant<Tensor
     if (type == "f32"){
         Tensor<float> t = Tensor(reinterpret_cast<float*>(p + offset), shape);
         m.insert({key, t});
-        return;
     }
     else if (type == "int8"){
         uint64_t scale_offset = value["scale_offset"];
@@ -106,7 +105,7 @@ void Parameters::load_parameters(const std::string& path){
     read(fd, &header_size, sizeof(header_size));
 
     // Read and parse the JSON Header
-    char* header = new char[header_size+1]; // TODO: Apparently using a runtime size is unsafe
+    char* header = new char[header_size+1];
     read(fd, header, header_size);
     header[header_size] = '\0';
     nlohmann::json header_json = nlohmann::json::parse(std::string(header));

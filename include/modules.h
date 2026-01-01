@@ -1,5 +1,5 @@
-#include "../../common/kernels.h"
-#include "../../loader/parameters.h"
+#include "kernels.h"
+#include "parameters.h"
 #include "inference_state.h"
 
 

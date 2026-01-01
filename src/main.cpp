@@ -1,6 +1,6 @@
 #include <iostream>
-#include "src/loader/parameters.h"
-#include "src/model/mistral/modules.h"
+#include "../include/parameters.h"
+#include "../include/modules.h"
 #include <random>
 #include <chrono>
 

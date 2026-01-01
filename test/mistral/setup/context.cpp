@@ -20,7 +20,7 @@ std::shared_ptr<Parameters> get_params(){
 }
 
 void load_expected_values(){
-    std::ifstream f("expected.txt");
+    std::ifstream f("../test/mistral/expected.txt");
     std::string line, name;
 
     while (std::getline(f, name)){
