@@ -6,19 +6,8 @@ Torchless is a custom-built LLM inference engine written entirely from scratch. 
 
 ![demo2](https://github.com/user-attachments/assets/1711dc3e-9ab2-4f73-8c35-b7ac3aabec55)
 
-I am building this project to learn C++, performance engineering and LLM internals.
 
-# Status
-
-Next
-
-- Rewrite of slow code sections
-- Support [Ministral 3 3B](https://huggingface.co/mistralai/Ministral-3-3B-Reasoning-2512)
-
-Make it super fast with
-- SIMD
-- Quantization algorithms
-- CUDA
+This project is closed and kept as an educational resource on LLM inference. Building a new vLLM style engine.
 
 ## How it works
 
