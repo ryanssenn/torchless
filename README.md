@@ -1,17 +1,14 @@
 # Torchless
 
-Torchless is a custom-built LLM inference engine written entirely from scratch. It currently runs [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1) on CPU for local text completion.
+This is a inference engine built from scratch that runs Mistral 7B on CPU for local text completion. It implements its own tensors, quantized weight loader, BPE tokenizer, manual memory management with KV caching, and the full Mistral architecture.
 
 <br>
 
 ![demo2](https://github.com/user-attachments/assets/1711dc3e-9ab2-4f73-8c35-b7ac3aabec55)
 
-
-This project is closed and kept as an educational resource on LLM inference. Building a new vLLM style engine.
-
 ## How it works
 
-If you are new to LLM internals, an inference engine is essentially a loop that predicts the next word in a sequence, adds it to the history, and repeats. Here is the exact lifecycle of a prompt:
+If you are new to LLM internals, an inference engine is essentially a loop that predicts the next word in a sequence, adds it to the history, and repeats. Here is the full lifecycle:
 
 ### Loading
 Before we can run any math, we need the weights. The `export_mistral.py` script takes the complex Hugging Face folder structure and packs the weights into a single standardized binary file. The C++ engine loads this entire file into RAM at startup so the data is mapped and ready for computation.
@@ -71,28 +68,6 @@ cmake --build .
 ```
 
 If you run into issues that appear specific to your environment, feel free to open a GitHub issue.
-
-# Resources
-
-#### Some of the material that helped me learn the theory or guided me build the engine
-
-##### ML Theory
-- [Attention Is All You Need](https://arxiv.org/pdf/1706.03762)
-- [Andrej Karpathy - Let’s build the GPT Tokenizer](https://www.youtube.com/watch?v=zduSFxRajkE)
-- [Rotary Embeddings](https://www.youtube.com/watch?v=V8r__fXx7tU)
-
-##### Systems Internals
-- [Edward Z. Yang - PyTorch Internals](https://blog.ezyang.com/2019/05/pytorch-internals/)
-- [C++ Vtables](https://shaharmike.com/cpp/vtable-part1/)
-- [Andrew Chan - yalm](https://andrewkchan.dev/posts/yalm.html)
-- [Arseny Kapoulkine - LLM inference speed of light](https://zeux.io/2024/03/15/llm-inference-sol/)
-- [Maxime Labonne - Quantize llama models](https://medium.com/data-science/quantize-llama-models-with-ggml-and-llama-cpp-3612dfbcc172)
-
-##### Reference Implementations
-- [Hugging Face - Mistral model](https://github.com/huggingface/transformers/blob/main/src/transformers/models/mistral/modeling_mistral.py)
-- [Arseny Kapoulkine - calm](https://github.com/zeux/calm/tree/main)
-- [Georgi Gerganov - llama.cpp + ggml](https://github.com/ggml-org/llama.cpp/)
-- [Andrej Karpathy - llama2.c quantization](https://github.com/karpathy/llama2.c/blob/master/export.py)
 
 # Roadmap
 
@@ -157,3 +132,26 @@ The architecture *(src/model/mistral/modules.cpp)* is broken into independent C+
 
 ### Custom CUDA Kernels
 - [ ] Todo
+
+
+# Resources
+
+#### Some of the material that helped me learn the theory or guided me build the engine
+
+##### ML Theory
+- [Attention Is All You Need](https://arxiv.org/pdf/1706.03762)
+- [Andrej Karpathy - Let’s build the GPT Tokenizer](https://www.youtube.com/watch?v=zduSFxRajkE)
+- [Rotary Embeddings](https://www.youtube.com/watch?v=V8r__fXx7tU)
+
+##### Systems Internals
+- [Edward Z. Yang - PyTorch Internals](https://blog.ezyang.com/2019/05/pytorch-internals/)
+- [C++ Vtables](https://shaharmike.com/cpp/vtable-part1/)
+- [Andrew Chan - yalm](https://andrewkchan.dev/posts/yalm.html)
+- [Arseny Kapoulkine - LLM inference speed of light](https://zeux.io/2024/03/15/llm-inference-sol/)
+- [Maxime Labonne - Quantize llama models](https://medium.com/data-science/quantize-llama-models-with-ggml-and-llama-cpp-3612dfbcc172)
+
+##### Reference Implementations
+- [Hugging Face - Mistral model](https://github.com/huggingface/transformers/blob/main/src/transformers/models/mistral/modeling_mistral.py)
+- [Arseny Kapoulkine - calm](https://github.com/zeux/calm/tree/main)
+- [Georgi Gerganov - llama.cpp + ggml](https://github.com/ggml-org/llama.cpp/)
+- [Andrej Karpathy - llama2.c quantization](https://github.com/karpathy/llama2.c/blob/master/export.py)
