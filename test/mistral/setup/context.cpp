@@ -13,14 +13,24 @@ std::shared_ptr<Parameters> get_params(){
         return params;
     }
 
-    params->load_parameters("../mistral.bin");
+    std::string model_path = "mistral.bin";
+    if (!std::ifstream(model_path).good()) {
+        model_path = "../mistral.bin";
+    }
+
+    params->load_parameters(model_path);
     init = true;
 
     return params;
 }
 
 void load_expected_values(){
-    std::ifstream f("../test/mistral/expected.txt");
+    std::string expected_path = "test/mistral/expected.txt";
+    if (!std::ifstream(expected_path).good()) {
+        expected_path = "../test/mistral/expected.txt";
+    }
+
+    std::ifstream f(expected_path);
     std::string line, name;
 
     while (std::getline(f, name)){

@@ -88,7 +88,7 @@ void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, co
 
     uint64_t end_time = get_timestamp_ms();
 
-    std::cout << "throughput: " << (i+1) / ((end_time - start_time) / 1000.0) << "tok/s" << std::endl;
+    std::cout << "throughput: " << (i+1) / ((end_time - start_time) / 1000.0) << " tok/s" << std::endl;
 }
 
 int main(int argc, char** argv) {

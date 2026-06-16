@@ -12,6 +12,7 @@ int main() {
     for (const TestCase& t : tests) {
         if (t.quant == get_params()->config.quant){
             total++;
+            std::cout << "Running " << t.name << std::endl;
             int result = t.func();
             if (result != 0) {
                 failed++;
