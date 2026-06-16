@@ -3,6 +3,8 @@
 #include "../include/modules.h"
 #include <random>
 #include <chrono>
+#include <string>
+#include <vector>
 
 std::random_device rd;
 std::mt19937 gen(rd());
@@ -27,14 +29,14 @@ uint32_t sample_max(InferenceState& infer){
 }
 
 uint32_t sample_multinomial(InferenceState& infer, float temp){
-    if (temp > 0) {
-        for (int i=0; i<infer.logits.numel; i++) {
-            infer.logits.data[i] /= temp;
-        }
-        softmax(infer.probs, infer.logits);
-    } else {
+    if (temp <= 0) {
         return sample_max(infer);
     }
+
+    for (int i=0; i<infer.logits.numel; i++) {
+        infer.probs.data[i] = infer.logits.data[i] / temp;
+    }
+    softmax(infer.probs, infer.probs);
 
     float r = distr(gen);
     float total = 0;
@@ -49,13 +51,13 @@ uint32_t sample_multinomial(InferenceState& infer, float temp){
 }
 
 template <typename T>
-uint32_t generate(Model<T>& model, InferenceState& infer, size_t token){
+uint32_t generate(Model<T>& model, InferenceState& infer, size_t token, float temp){
     model.forward(infer, token);
-    return sample_multinomial(infer, 0.0f);
+    return sample_multinomial(infer, temp);
 }
 
 template <typename T>
-void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, const std::vector<uint32_t>& got) {
+void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, const std::vector<uint32_t>& got, float temp) {
     Model<T> model(params);
 
     for (int i=0; i<got.size()-1; i++){
@@ -75,7 +77,7 @@ void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, co
     }
     
     for (;i<50;i++){
-        t = generate(model, infer, t);
+        t = generate(model, infer, t, temp);
 
         if (t == eos_token_id){
             break;
@@ -92,23 +94,36 @@ void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, co
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <model_path> <prompt>" << std::endl;
+    float temp = 0.0f;
+    std::vector<std::string> positional;
+
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--temp" && i + 1 < argc) {
+            temp = std::stof(argv[++i]);
+        } else {
+            positional.push_back(arg);
+        }
+    }
+
+    if (positional.size() < 2) {
+        std::cerr << "Usage: " << argv[0] << " <model_path> <prompt> [--temp TEMP]" << std::endl;
+        std::cerr << "  --temp  Sampling temperature. 0 = greedy (default). Try 0.7 for less repetition." << std::endl;
         return 1;
     }
 
-    std::string model_path = argv[1];
+    std::string model_path = positional[0];
+    std::string text = positional[1];
 
     std::shared_ptr<Parameters> params = std::make_shared<Parameters>();
     params->load_parameters(model_path);
 
     InferenceState infer(params->config);
-    const std::string text = argv[2];
     std::vector<uint32_t> got = params->tokenizer.encode(text);
     if (params->config.quant == "int8") {
-        run_inference<int8_t>(params, infer, got);
+        run_inference<int8_t>(params, infer, got, temp);
     } else if (params->config.quant == "f32") {
-        run_inference<float>(params, infer, got);
+        run_inference<float>(params, infer, got, temp);
     }
 
     return 0;

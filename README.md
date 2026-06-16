@@ -89,8 +89,10 @@ Built target test_exec
 Same command for f32 and int8 - the runtime picks the path from the binary header.
 
 ```bash
-./build/mistral.cpp ./mistral.bin "Paris is the capital of"
+./build/mistral.cpp ./mistral.bin "Paris is the capital of" --temp 0.7
 ```
+
+`--temp` controls sampling: `0` is greedy (default), values like `0.7` reduce repetition.
 
 The program prints up to 50 generated tokens and then a throughput line like:
 
@@ -167,7 +169,7 @@ then `./mistral.bin` does not exist at the repo root. Run the export command in 
 
 # Roadmap
 
-Full progress tracker: [ROADMAP.md](ROADMAP.md). Still todo: temperature scaling, terminal chat interface, fp8, SIMD, CUDA.
+Full progress tracker: [ROADMAP.md](ROADMAP.md). Still todo: terminal chat interface, fp8, SIMD, CUDA.
 
 
 # Resources
