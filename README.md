@@ -45,7 +45,7 @@ The app and tests read quantization mode from the binary header, so export the f
 
 **Default - int8 (smaller, faster inference)**
 
-Per-group symmetric int8 quantization on MLP projection weights (~16 GB). Attention projections, embeddings, norms, and `lm_head` stay f32. Faster on CPU than full f32, with much better output quality than quantizing attention.
+Per-group symmetric int8 quantization on MLP gate/up weights (~18 GB). `down_proj`, attention, embeddings, norms, and `lm_head` stay f32 for generation quality.
 
 ```bash
 python3 export_mistral.py \
@@ -110,6 +110,23 @@ First, the Python scripts in `scripts/test/mistral/` run individual pieces, atte
 
 Then the C++ tests in `test/mistral/` load those values and compare them against the output of the corresponding mistral.cpp code. For example, an attention test copies a known `hidden_state` from the golden file, runs `Attention::forward`, and checks that Q/K/V and the output match. The same pattern is used for the tokenizer, CPU kernels (matmul, softmax, RoPE, SiLU), and each decoder module. Comparisons use a tolerance of ±0.05.
 
+**End-to-end logits tests** (`test/mistral/logits_expected.txt`) compare multi-token greedy decoding against Hugging Face f32 reference:
+
+- Top-10 token IDs and logit values after the last prompt token and each of the next 5 greedy steps
+- Per-layer hidden states after the last prompt token (finds where int8 drift starts)
+
+Regenerate golden logits after changing prompts or the model (needs ~16 GB free RAM; quit any running `mistral.cpp` first):
+
+```bash
+python scripts/test/mistral/logits.py
+```
+
+Optional per-layer hidden-state goldens (much heavier on memory):
+
+```bash
+DUMP_LAYER_STACK=1 python scripts/test/mistral/logits.py
+```
+
 Run the tests from the repo root after creating `./mistral.bin`:
 
 ```bash
@@ -117,46 +134,60 @@ cmake --build build --target test_exec
 ./build/test_exec
 ```
 
-Tests are filtered by the quantization mode in `mistral.bin`. With the default int8 export, tests cover load, MLP, and tokenizer only. Golden values in `test/mistral/expected.txt` come from Hugging Face f32 weights; re-export with `--quant f32` to run the full 19-test suite.
+Tests are filtered by the quantization mode in `mistral.bin`. Golden values come from Hugging Face f32 weights. int8 runs component tests plus logits/layer-stack diagnostics (these fail when int8 drift breaks generation). Re-export with `--quant f32` to run the full 19-test component suite.
+
+The runner prints a report (green checks on pass, red on fail) with per-test timing.
 
 **Expected result (default int8 export):**
 
 ```text
-Running tests for model type: int8
-Running load config
-Running load weights
-Running test attention feedforward mlp
-Running tokenizer encode
-Running tokenizer encode fallback
+====================================================
+  mistral.cpp · test suite            model: int8
+====================================================
 
-Summary : 5 / 5 tests passed
+  ✓  test logits multi top10               0.0 ms
+  ✓  test layer stack prefill              0.0 ms
+  ✓  load config                           0.0 ms
+  ✓  load weights                          9.9 ms
+  ✓  test attention feedforward mlp      290.2 ms
+  ✓  tokenizer encode                      0.3 ms
+  ✓  tokenizer encode fallback             0.0 ms
+
+----------------------------------------------------
+  PASSED   7 / 7        0 failed        300.4 ms
+====================================================
 ```
 
 **Expected result (f32 export):**
 
 ```text
-Running tests for model type: f32
-Running test rope
-Running test matmul
-Running test row matmul
-Running test softmax
-Running test silu
-Running load config
-Running load weights
-Running test layer
-Running test attention
-Running test attention feedforward mlp
-Running test kv cache
-Running test embedding
-Running test rotary embedding inv freq
-Running test rotary embedding
-Running test rmsnorm
-Running test lm head
-Running tokenizer encode
-Running tokenizer encode fallback
-Running tokenizer decode
+====================================================
+  mistral.cpp · test suite             model: f32
+====================================================
 
-Summary : 19 / 19 tests passed
+  ✓  test rope                             0.0 ms
+  ✓  test matmul                           0.0 ms
+  ✓  test row matmul                       0.0 ms
+  ✓  test softmax                          0.0 ms
+  ✓  test silu                             0.0 ms
+  ✓  load config                           0.0 ms
+  ✓  load weights                         22.9 ms
+  ✓  test layer                           45.1 ms
+  ✓  test attention                        2.1 ms
+  ✓  test attention feedforward mlp       48.7 ms
+  ✓  test kv cache                         1.4 ms
+  ✓  test embedding                        0.1 ms
+  ✓  test rotary embedding inv freq        0.0 ms
+  ✓  test rotary embedding                 0.0 ms
+  ✓  test rmsnorm                          0.1 ms
+  ✓  test lm head                          6.3 ms
+  ✓  tokenizer encode                      0.4 ms
+  ✓  tokenizer encode fallback             0.0 ms
+  ✓  tokenizer decode                      0.0 ms
+
+----------------------------------------------------
+  PASSED   19 / 19        0 failed        198.4 ms
+====================================================
 ```
 
 If you see this:
