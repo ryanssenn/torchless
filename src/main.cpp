@@ -108,8 +108,10 @@ void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, co
     if (eos_it != params->tokenizer.token_to_id.end()) {
         eos_token_id = eos_it->second;
     }
-    
-    for (;i<50;i++){
+
+    std::cout << std::endl;
+
+    for (;i<70;i++){
         t = generate(model, infer, t, temp, history);
         history.push_back(t);
 

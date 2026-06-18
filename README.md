@@ -100,7 +100,7 @@ Same command for f32 and int8 - the runtime picks the path from the binary heade
 
 `--temp` controls sampling: `0` is greedy (default), values like `0.7` add randomness. A repetition penalty is applied on every step regardless of temperature, so even greedy decoding discourages repeats.
 
-The program prints up to 50 generated tokens and then a throughput line like:
+The program prints up to 70 generated tokens and then a throughput line like:
 
 ```text
 throughput: <number> tok/s
