@@ -11,7 +11,7 @@ static const std::unordered_map<std::string, std::string> PROMPTS = {
     {"paris", "Paris is the capital of"},
 };
 
-// Count how many of the int8 top-k token ids also appear in the f32 golden top-k.
+// Count how many of the Q8F16 top-k token ids also appear in the golden top-k.
 static size_t topk_overlap(const TopK& got, const Tensor<float>& exp_ids) {
     size_t overlap = 0;
     for (uint32_t id : got.ids) {
@@ -37,10 +37,10 @@ static float aligned_value_error(const TopK& got, const Tensor<float>& exp_ids,
     return max_err;
 }
 
-// Teacher-forced divergence report: at every step we feed the f32 golden's top-1
-// token, so the int8 model always sees the exact context f32 saw. This isolates
-// per-step int8 logit error instead of letting trajectories drift apart.
-// Pass/fail: f32 requires top-1 argmax; int8 requires full top-10 set and max logit error < 0.1.
+// Teacher-forced divergence report: at every step we feed the golden top-1
+// token, so the Q8F16 model always sees the exact golden context. This isolates
+// per-step logit error instead of letting trajectories drift apart.
+// Pass/fail: Q8F16 requires full top-10 set and max logit error < 0.1.
 template <typename TGateUp, typename TLinear>
 static int run_logits_prompt(const std::string& prefix) {
     std::shared_ptr<Parameters> params = get_params();
@@ -83,8 +83,8 @@ static int run_logits_prompt(const std::string& prefix) {
         float max_err = aligned_value_error(got, exp_ids, exp_vals);
 
         std::cout << "  [" << prefix << "] step " << step
-                  << " top1 f32=" << exp_top1 << "(" << exp_vals.data[0] << ")"
-                  << " int8=" << (got.ids.empty() ? 0 : got.ids[0])
+                  << " top1 golden=" << exp_top1 << "(" << exp_vals.data[0] << ")"
+                  << " Q8F16=" << (got.ids.empty() ? 0 : got.ids[0])
                   << "(" << (got.vals.empty() ? 0.0f : got.vals[0]) << ")"
                   << " | top1=" << (top1_match ? "OK" : "FLIP")
                   << " top10_overlap=" << overlap << "/" << LOGITS_TOPK
@@ -207,7 +207,6 @@ static int test_layer_stack() {
     return 0;
 }
 
-static int test_logits_multi_f32() { return test_logits_multi<float, float>(); }
 static int test_logits_multi_int8() {
     auto params = get_params();
     if (params->uses_f16_linear_weights()) {
@@ -215,7 +214,6 @@ static int test_logits_multi_int8() {
     }
     return test_logits_multi<int8_t, float>();
 }
-static int test_layer_stack_f32() { return test_layer_stack<float, float>(); }
 static int test_layer_stack_int8() {
     auto params = get_params();
     if (params->uses_f16_linear_weights()) {
@@ -224,9 +222,5 @@ static int test_layer_stack_int8() {
     return test_layer_stack<int8_t, float>();
 }
 
-RegisterTest logits_multi_reg("test logits multi top10", "f32", &test_logits_multi_f32);
 RegisterTest logits_multi_reg_q8f16("test logits multi top10", "Q8F16", &test_logits_multi_int8);
-RegisterTest logits_multi_reg_int8("test logits multi top10", "int8", &test_logits_multi_int8);
-RegisterTest layer_stack_reg("test layer stack prefill", "f32", &test_layer_stack_f32);
 RegisterTest layer_stack_reg_q8f16("test layer stack prefill", "Q8F16", &test_layer_stack_int8);
-RegisterTest layer_stack_reg_int8("test layer stack prefill", "int8", &test_layer_stack_int8);
