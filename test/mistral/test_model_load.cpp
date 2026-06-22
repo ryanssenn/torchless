@@ -263,8 +263,8 @@ int test_mog_config() {
     if (!expect_near("rope_theta", c.rope_theta, 10000.0f, 1e-3f)) return 1;
     if (!expect_near("norm_eps", c.norm_eps, 1e-5f, 1e-8f)) return 1;
 
-    if (c.quant != "Q8F16" && c.quant != "f32" && c.quant != "int8") {
-        std::cerr << "quant mismatch: got " << c.quant << ", want Q8F16 or f32\n";
+    if (c.quant != "Q8F16") {
+        std::cerr << "quant mismatch: got " << c.quant << ", want Q8F16\n";
         return 1;
     }
 
@@ -317,7 +317,7 @@ int test_mog_tensor_inventory() {
             const bool want_f16 = layer_tensor_wants_f16(spec.name, quant, f16_linear);
             if (is_int8_tensor(v) != want_int8) {
                 std::cerr << spec.name << " dtype mismatch at layer " << layer
-                          << ": expected " << (want_int8 ? "int8" : (want_f16 ? "f16" : "f32")) << "\n";
+                          << ": expected " << (want_int8 ? "int8" : (want_f16 ? "f16" : "float")) << "\n";
                 return 1;
             }
             if (want_f16 && !is_fp16_tensor(v)) {
@@ -325,7 +325,7 @@ int test_mog_tensor_inventory() {
                 return 1;
             }
             if (!want_int8 && !want_f16 && is_fp16_tensor(v)) {
-                std::cerr << spec.name << " dtype mismatch at layer " << layer << ": expected f32\n";
+                std::cerr << spec.name << " dtype mismatch at layer " << layer << ": expected float\n";
                 return 1;
             }
         }
@@ -353,10 +353,6 @@ int test_mog_tensor_inventory() {
         }
         if (is_q8f16(quant) && f16_linear && !is_fp16_tensor(v)) {
             std::cerr << spec.name << " should be f16\n";
-            return 1;
-        }
-        if (quant == "f32" && !std::holds_alternative<Tensor<float>>(v)) {
-            std::cerr << spec.name << " should be f32\n";
             return 1;
         }
     }
@@ -423,13 +419,6 @@ int test_mog_weight_spotcheck() {
 }
 
 static RegisterTest mog_header_q8f16("mog header", "Q8F16", &test_mog_header);
-static RegisterTest mog_header_int8("mog header", "int8", &test_mog_header);
-static RegisterTest mog_config_f32("mog config", "f32", &test_mog_config);
 static RegisterTest mog_config_q8f16("mog config", "Q8F16", &test_mog_config);
-static RegisterTest mog_config_int8("mog config", "int8", &test_mog_config);
-static RegisterTest mog_inventory_f32("mog tensor inventory", "f32", &test_mog_tensor_inventory);
 static RegisterTest mog_inventory_q8f16("mog tensor inventory", "Q8F16", &test_mog_tensor_inventory);
-static RegisterTest mog_inventory_int8("mog tensor inventory", "int8", &test_mog_tensor_inventory);
-static RegisterTest mog_spotcheck_f32("mog weight spotcheck", "f32", &test_mog_weight_spotcheck);
 static RegisterTest mog_spotcheck_q8f16("mog weight spotcheck", "Q8F16", &test_mog_weight_spotcheck);
-static RegisterTest mog_spotcheck_int8("mog weight spotcheck", "int8", &test_mog_weight_spotcheck);

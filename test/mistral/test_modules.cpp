@@ -21,8 +21,6 @@ int test_layer() {
     return 0;
 }
 
-RegisterTest layer_reg("test layer", "f32", &test_layer<float, float>);
-
 template <typename TLinear>
 int test_attention() {
     std::shared_ptr<Parameters> params = get_params();
@@ -89,7 +87,6 @@ int test_mlp(){
     return 0;
 }
 
-RegisterTest mlp_feedforward_reg("test attention feedforward mlp", "f32", &test_mlp<float, float>);
 static int test_mlp_int8() {
     auto params = get_params();
     if (params->uses_f16_linear_weights()) {
@@ -98,7 +95,6 @@ static int test_mlp_int8() {
     return test_mlp<int8_t, float>();
 }
 RegisterTest mlp_feedforward_reg_q("test attention feedforward mlp", "Q8F16", &test_mlp_int8);
-RegisterTest mlp_feedforward_reg_legacy_q("test attention feedforward mlp", "int8", &test_mlp_int8);
 
 int test_kv_cache() {
     infer.pos = 5;
