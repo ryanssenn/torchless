@@ -20,7 +20,7 @@ Benchmarks on M4 MacBook, Q8F16 (~10 GB).
 
 ## Run it
 
-Built and tested on macOS. Linux is not supported.
+Only available on MacOS.
 
 1. Clone this repo:
 
