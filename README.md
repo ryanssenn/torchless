@@ -6,13 +6,13 @@ A compact C++ inference engine optimized for Apple platforms.
 
 Load a single model binary and run inference locally. No runtime dependencies. A small C++ codebase focused on readability and simplicity.
 
-`.mog` is qmog's model format containing everything needed for inference. Pre-built `.mog` files are available, or you can generate your own from a Hugging Face Qwen3 checkpoint using [qpack](https://github.com/ryanssenn/qpack).
+Models are distributed as `.mog` files, a self-contained format that includes everything needed for inference. Pre-built models are available, or you can generate your own from a Hugging Face Qwen3 checkpoint using [qpack](https://github.com/ryanssenn/qpack).
 
 ## Supported models
 
-| Model | Size |
-| ----- | ---- |
-| [Qwen3-0.6B f16](https://huggingface.co/QmogAI/Qwen3-0.6B.mog) | ~1.2 GB |
+| Model | Size | tok/s |
+| ----- | ---- | ----- |
+| [Qwen3-0.6B f16](https://huggingface.co/QmogAI/Qwen3-0.6B.mog) | ~1.2 GB | |
 
 ## Run it
 

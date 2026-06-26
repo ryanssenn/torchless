@@ -57,18 +57,6 @@ uint64_t Bpe::pack(uint32_t left, uint32_t right) const {
     return packed;
 }
 
-// Converts a token string to its id.
-// By the time we call this, tokenizer-specific code should have produced a
-// string that exists in the vocab.
-std::vector<uint32_t> Bpe::get_id(const std::string& token) const {
-    auto it = token_to_id.find(token);
-    if (it == token_to_id.end()) {
-        std::cerr << "token missing from vocabulary: " << token << std::endl;
-        std::exit(1);
-    }
-    return {it->second};
-}
-
 // Finds the best pair to merge next.
 // "Best" means lowest rank. During tokenizer training, common pairs were added
 // earlier, so lower rank is higher priority. Encoding replays that order.

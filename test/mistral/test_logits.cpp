@@ -1,6 +1,6 @@
 #include "setup/context.h"
 #include "common/fp16.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 #include <unordered_map>
 
 static constexpr size_t LOGITS_TOPK = 10;
@@ -43,7 +43,7 @@ static float aligned_value_error(const TopK& got, const Tensor<float>& exp_ids,
 // Pass/fail: Q8F16 requires full top-10 set and max logit error < 0.1.
 template <typename TMatmul, typename TAux>
 static int run_logits_prompt(const std::string& prefix) {
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
     Model<TMatmul, TAux> model(params);
 
     auto it = PROMPTS.find(prefix);
@@ -144,7 +144,7 @@ static float layer_stack_atol(const std::string& quant, size_t layer, size_t n_l
 
 template <typename TMatmul, typename TAux>
 static int run_layer_stack_prompt(const std::string& prefix) {
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
     Model<TMatmul, TAux> model(params);
 
     auto it = PROMPTS.find(prefix);

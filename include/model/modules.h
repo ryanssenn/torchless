@@ -1,5 +1,5 @@
 #include "backend/kernels.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 #include "model/inference_state.h"
 
 
@@ -77,7 +77,7 @@ struct Layer {
     Attention<TMatmul> attn;
     MLP<TMatmul> mlp;
 
-    Layer(int i, std::shared_ptr<Parameters> p) :
+    Layer(int i, std::shared_ptr<ModelLoad> p) :
                                 i(i),
 
                                 input_norm(p->get_tensor<TAux>(i, "input_layernorm.weight")),
@@ -103,7 +103,7 @@ template <typename TAux>
 struct LMHead {
     Tensor<TAux> lm_head;
 
-    LMHead(std::shared_ptr<Parameters> params) : lm_head(params->get_tensor<TAux>(-1, "lm_head.weight")) {}
+    LMHead(std::shared_ptr<ModelLoad> params) : lm_head(params->get_tensor<TAux>(-1, "lm_head.weight")) {}
 
     void forward(InferenceState& infer);
 };
@@ -117,7 +117,7 @@ struct Model {
     LMHead<TAux> lmHead;
     std::vector<Layer<TMatmul, TAux>> layers;
 
-    Model(std::shared_ptr<Parameters> params) : embedding(params->get_tensor<TAux>(-1, "model.embed_tokens.weight")), norm(params->get_tensor<TAux>(-1, "model.norm.weight")), lmHead(params){
+    Model(std::shared_ptr<ModelLoad> params) : embedding(params->get_tensor<TAux>(-1, "model.embed_tokens.weight")), norm(params->get_tensor<TAux>(-1, "model.norm.weight")), lmHead(params){
         for (int i=0;i<params->config.n_layers; i++){
             layers.emplace_back(i, params);
         }

@@ -10,13 +10,13 @@ The goal is simple: turn prompt text into token ids, run those ids through the m
 
 ## 1. The model file is opened
 
-The CLI starts in `src/main.cpp`. It reads the model path and prompt from argv, then creates `Parameters` and calls:
+The CLI starts in `src/main.cpp`. It reads the model path and prompt from argv, then creates `ModelLoad` and calls:
 
 ```cpp
-params->load_parameters(model_path);
+params->load(model_path);
 ```
 
-`Parameters::load_parameters()` lives in `src/loader/parameters.cpp`. It opens the `.mog` file, memory-maps it, checks the magic/version, then parses the header.
+`ModelLoad::load()` lives in `src/loader/model_load.cpp`. It opens the `.mog` file, memory-maps it, checks the magic/version, then parses the header.
 
 The `.mog` file contains:
 
@@ -29,7 +29,7 @@ The loader does not copy the full weight payload into heap memory. It creates te
 
 ## 2. Config becomes runtime shape information
 
-The header config fills `Config` in `include/loader/parameters.h`.
+The header config fills `Config` in `include/loader/model_load.h`.
 
 This tells the runtime how large every tensor should be:
 
@@ -117,7 +117,7 @@ The runtime selects a model template based on quantization.
 For example:
 
 - f32 uses `Model<float, float>`
-- Q8F16 uses int8 matmul weights and f16 auxiliary weights
+- f16 inference is not yet implemented in the CLI
 
 `Model` is defined in `include/model/modules.h` and implemented in `src/model/mistral/modules.cpp`.
 
@@ -128,7 +128,7 @@ It owns:
 - final norm
 - LM head
 
-Each submodule receives tensor views from `Parameters`.
+Each submodule receives tensor views from `ModelLoad`.
 
 ## 7. Prompt prefill warms the cache
 

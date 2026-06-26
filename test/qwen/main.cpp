@@ -55,7 +55,7 @@ void print_indented(const std::string& block) {
 int main() {
     load_expected_values();
 
-    const std::string quant = get_params()->config.quant;
+    const std::string quant = get_model()->config.quant;
 
     size_t name_w = 0;
     int matching = 0;

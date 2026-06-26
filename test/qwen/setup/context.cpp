@@ -5,10 +5,10 @@
 
 std::vector<TestCase> tests;
 
-std::shared_ptr<Parameters> get_params(){
+std::shared_ptr<ModelLoad> get_model(){
     static bool init = false;
 
-    static std::shared_ptr<Parameters> params = std::make_shared<Parameters>();
+    static std::shared_ptr<ModelLoad> params = std::make_shared<ModelLoad>();
 
     if (init){
         return params;
@@ -19,7 +19,7 @@ std::shared_ptr<Parameters> get_params(){
         model_path = "../qwen3-0.6B.mog";
     }
 
-    params->load_parameters(model_path);
+    params->load(model_path);
     init = true;
 
     return params;
@@ -81,7 +81,7 @@ TopK get_topk(const Tensor<float>& logits, size_t k){
 }
 
 static float equals_atol(){
-    if (is_f16(get_params()->config.quant)) {
+    if (is_f16(get_model()->config.quant)) {
         return 1e-3f;
     }
     return 5e-2f;

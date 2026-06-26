@@ -6,7 +6,7 @@
 namespace {
 
 const QwenPreTokenizer& qwen_pre_tokenizer() {
-    return get_params()->tokenizer.pre_tokenizer;
+    return get_model()->tokenizer.pre_tokenizer;
 }
 
 // Compare split output to an expected list of pieces and print both on mismatch.

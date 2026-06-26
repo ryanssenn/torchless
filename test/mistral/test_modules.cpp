@@ -3,7 +3,7 @@
 
 template <typename TMatmul, typename TAux>
 int test_layer() {
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
     infer.pos = 0;
 
     Layer<TMatmul, TAux> layer(0, params);
@@ -23,7 +23,7 @@ int test_layer() {
 
 template <typename TMatmul>
 int test_attention() {
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
     infer.pos = 0;
 
     Attention<TMatmul> attn(params->get_tensor<TMatmul>(0, "self_attn.q_proj.weight"), params->get_tensor<TMatmul>(0, "self_attn.k_proj.weight"), params->get_tensor<TMatmul>(0, "self_attn.v_proj.weight"), params->get_tensor<TMatmul>(0, "self_attn.o_proj.weight"), 0);
@@ -58,7 +58,7 @@ int test_attention() {
 }
 
 static int test_attention_dispatch() {
-    auto params = get_params();
+    auto params = get_model();
     if (is_q8f16(params->config.quant)) {
         return test_attention<int8_t>();
     }
@@ -72,7 +72,7 @@ RegisterTest attention_reg("test attention", "any", &test_attention_dispatch);
 
 template <typename TMatmul>
 int test_mlp(){
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
 
     MLP<TMatmul> mlp(params->get_tensor<TMatmul>(0, "mlp.down_proj.weight"),
                params->get_tensor<TMatmul>(0, "mlp.gate_proj.weight"),
@@ -132,7 +132,7 @@ int test_kv_cache() {
 RegisterTest kv_cache_reg("test kv cache", "any", &test_kv_cache);
 
 static int test_embedding_dispatch() {
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
 
     if (params->uses_f16_aux_weights()) {
         Embedding<fp16_t> emb(params->get_tensor<fp16_t>(-1, "model.embed_tokens.weight"));
@@ -186,7 +186,7 @@ static int test_embedding_dispatch() {
 RegisterTest embedding_reg("test embedding", "any", &test_embedding_dispatch);
 
 int test_rotary_embedding_inv_freq(){
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
 
     RotaryEmbedding::init_freq(infer, params->config);
 
@@ -201,7 +201,7 @@ int test_rotary_embedding_inv_freq(){
 RegisterTest rotary_embedding_inv_freq_reg("test rotary embedding inv freq", "any", &test_rotary_embedding_inv_freq);
 
 int test_rotary_embedding(){
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
 
     RotaryEmbedding::init_freq(infer, params->config);
 
@@ -258,7 +258,7 @@ RegisterTest rmsnorm_reg("test rmsnorm", "any", &test_rmsnorm);
 
 
 static int test_lm_head_dispatch() {
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
 
     if (params->uses_f16_aux_weights()) {
         LMHead<fp16_t> l(params);

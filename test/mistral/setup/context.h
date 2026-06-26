@@ -1,7 +1,7 @@
 #include <string>
 #include <iostream>
 #include "backend/kernels.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 #include "model/modules.h"
 
 struct TestCase {
@@ -18,8 +18,8 @@ struct RegisterTest {
     }
 };
 
-std::shared_ptr<Parameters> get_params();
-inline InferenceState infer(get_params()->config);
+std::shared_ptr<ModelLoad> get_model();
+inline InferenceState infer(get_model()->config);
 inline Arena arena(4*1024*1024); // 4 MB
 
 inline std::unordered_map<std::string, Tensor<float>> expected;

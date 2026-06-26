@@ -1,6 +1,5 @@
 #include "loader/binary_reader.h"
-#include "loader/model_format.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 #include <iostream>
 #include <cstring>
 
@@ -9,7 +8,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-void* Parameters::map_file(int fd, size_t& size){
+void* ModelLoad::map_file(int fd, size_t& size){
     struct stat st;
     if (fstat(fd, &st) < 0){
         std::cerr << "Model binary get size failed" << std::endl;
@@ -28,49 +27,49 @@ void* Parameters::map_file(int fd, size_t& size){
     return p;
 }
 
-void Parameters::load_config(BinaryReader& reader){
+void ModelLoad::load_config(BinaryReader& reader){
     uint32_t count = reader.read_u32();
 
     for (uint32_t i = 0; i < count; i++){
         std::string key = reader.read_string();
         uint8_t type = reader.read_u8();
 
-        if (key == "hidden_size" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        if (key == "hidden_size" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.hidden_size = reader.read_u32();
-        } else if (key == "intermediate_size" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "intermediate_size" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.intermediate_size = reader.read_u32();
-        } else if (key == "n_layers" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "n_layers" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.n_layers = reader.read_u32();
-        } else if (key == "n_heads" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "n_heads" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.n_heads = reader.read_u32();
-        } else if (key == "n_kv_heads" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "n_kv_heads" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.n_kv_heads = reader.read_u32();
-        } else if (key == "head_dim" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "head_dim" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.head_dim = reader.read_u32();
-        } else if (key == "vocab_size" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "vocab_size" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.vocab_size = reader.read_u32();
-        } else if (key == "sliding_window" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "sliding_window" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.sliding_window = reader.read_u32();
-        } else if (key == "max_position_embeddings" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "max_position_embeddings" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.max_position_embeddings = reader.read_u32();
-        } else if (key == "rope_theta" && type == static_cast<uint8_t>(model_format::KVType::FLOAT32)){
+        } else if (key == "rope_theta" && type == static_cast<uint8_t>(model_format::ConfigValueType::FLOAT32)){
             config.rope_theta = reader.read_f32();
-        } else if (key == "norm_eps" && type == static_cast<uint8_t>(model_format::KVType::FLOAT32)){
+        } else if (key == "norm_eps" && type == static_cast<uint8_t>(model_format::ConfigValueType::FLOAT32)){
             config.norm_eps = reader.read_f32();
-        } else if (key == "quant" && type == static_cast<uint8_t>(model_format::KVType::STRING)){
+        } else if (key == "quant" && type == static_cast<uint8_t>(model_format::ConfigValueType::STRING)){
             config.quant = reader.read_string();
-        } else if (key == "tie_word_embeddings" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "tie_word_embeddings" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.tie_word_embeddings = reader.read_u32() != 0;
-        } else if (key == "bos_token_id" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "bos_token_id" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.bos_token_id = reader.read_u32();
-        } else if (key == "eos_token_id" && type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+        } else if (key == "eos_token_id" && type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
             config.eos_token_id = reader.read_u32();
         } else {
-            if (type == static_cast<uint8_t>(model_format::KVType::STRING)){
+            if (type == static_cast<uint8_t>(model_format::ConfigValueType::STRING)){
                 reader.read_string();
-            } else if (type == static_cast<uint8_t>(model_format::KVType::UINT32)){
+            } else if (type == static_cast<uint8_t>(model_format::ConfigValueType::UINT32)){
                 reader.read_u32();
-            } else if (type == static_cast<uint8_t>(model_format::KVType::FLOAT32)){
+            } else if (type == static_cast<uint8_t>(model_format::ConfigValueType::FLOAT32)){
                 reader.read_f32();
             }
         }
@@ -81,7 +80,7 @@ void Parameters::load_config(BinaryReader& reader){
     }
 }
 
-void Parameters::load_tensor(std::unordered_map<std::string, WeightTensor>& m, char* p, const std::string& key, uint8_t dtype, const std::vector<size_t>& shape, uint64_t offset, uint64_t scale_offset, uint32_t scale_size){
+void ModelLoad::load_tensor(std::unordered_map<std::string, WeightTensor>& m, char* p, const std::string& key, uint8_t dtype, const std::vector<size_t>& shape, uint64_t offset, uint64_t scale_offset, uint32_t scale_size){
     if (dtype == static_cast<uint8_t>(model_format::DType::F32)){
         Tensor<float> t = Tensor(reinterpret_cast<float*>(p + offset), shape);
         m.insert({key, t});
@@ -97,15 +96,7 @@ void Parameters::load_tensor(std::unordered_map<std::string, WeightTensor>& m, c
     }
 }
 
-bool Parameters::uses_f16_aux_weights() const {
-    auto it = global_weights.find("model.embed_tokens.weight");
-    if (it == global_weights.end()) {
-        return false;
-    }
-    return std::holds_alternative<Tensor<fp16_t>>(it->second);
-}
-
-void Parameters::load_weights(char* p, BinaryReader& reader){
+void ModelLoad::load_weights(char* p, BinaryReader& reader){
     layer_weights.resize(config.n_layers);
 
     uint32_t count = reader.read_u32();
@@ -140,7 +131,7 @@ void Parameters::load_weights(char* p, BinaryReader& reader){
     }
 }
 
-void Parameters::load_parameters(const std::string& path){
+void ModelLoad::load(const std::string& path){
     int fd = open(path.c_str(), O_RDONLY);
 
     if (fd < 0){
@@ -164,11 +155,10 @@ void Parameters::load_parameters(const std::string& path){
 
     uint32_t version;
     std::memcpy(&version, base + 4, sizeof(version));
-    if (version < model_format::FORMAT_VERSION || version > model_format::MAX_FORMAT_VERSION){
+    if (version != model_format::FORMAT_VERSION){
         std::cerr << "unknown format version: " << version << std::endl;
         std::exit(1);
     }
-    format_version = version;
 
     uint64_t header_size;
     std::memcpy(&header_size, base + 8, sizeof(header_size));
@@ -183,7 +173,7 @@ void Parameters::load_parameters(const std::string& path){
     BinaryReader reader(base + header_start, header_size);
     config.architecture = reader.read_string();
     load_config(reader);
-    tokenizer.load(reader, format_version);
+    tokenizer.load(reader);
 
     size_t payload_base = (header_end + 63) & ~size_t(63);
     if (payload_base > file_size){
@@ -197,7 +187,7 @@ void Parameters::load_parameters(const std::string& path){
 }
 
 template<typename T>
-Tensor<T> Parameters::get_tensor(int layer, const std::string& name){
+Tensor<T> ModelLoad::get_tensor(int layer, const std::string& name){
     if (layer == -1){
         for (auto& e : global_weights){
             if (name == e.first){
@@ -219,7 +209,6 @@ Tensor<T> Parameters::get_tensor(int layer, const std::string& name){
     return {};
 }
 
-template Tensor<float> Parameters::get_tensor<float>(int, const std::string&);
-template Tensor<int8_t> Parameters::get_tensor<int8_t>(int, const std::string&);
-template Tensor<fp16_t> Parameters::get_tensor<fp16_t>(int, const std::string&);
-
+template Tensor<float> ModelLoad::get_tensor<float>(int, const std::string&);
+template Tensor<int8_t> ModelLoad::get_tensor<int8_t>(int, const std::string&);
+template Tensor<fp16_t> ModelLoad::get_tensor<fp16_t>(int, const std::string&);

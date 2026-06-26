@@ -1,11 +1,33 @@
 #pragma once
 
+#include <cstdint>
 #include <unordered_map>
 #include <string>
 #include "common/fp16.h"
 #include "common/tensor.h"
 #include "tokenizer/qwen_tokenizer.h"
 #include <variant>
+
+namespace model_format {
+
+constexpr char MAGIC[4] = {'M', 'O', 'G', '\0'};
+constexpr uint32_t FORMAT_VERSION = 2;
+
+enum class DType : uint8_t {
+    F32 = 0,
+    INT8 = 1,
+    F16 = 2,
+};
+
+enum class ConfigValueType : uint8_t {
+    STRING = 0,
+    UINT32 = 1,
+    FLOAT32 = 2,
+};
+
+constexpr size_t FILE_PREFIX_SIZE = 16; // magic + version + header_size
+
+} // namespace model_format
 
 struct Config {
     std::string architecture;
@@ -30,8 +52,7 @@ class BinaryReader;
 
 using WeightTensor = std::variant<Tensor<float>, Tensor<int8_t>, Tensor<fp16_t>>;
 
-struct Parameters {
-    uint32_t format_version = model_format::FORMAT_VERSION;
+struct ModelLoad {
     Config config;
     QwenTokenizer tokenizer;
 
@@ -43,17 +64,11 @@ struct Parameters {
 
     void load_config(BinaryReader& reader);
     void load_weights(char* p, BinaryReader& reader);
-    void load_parameters(const std::string& path);
-
-    bool uses_f16_aux_weights() const;
+    void load(const std::string& path);
 
     template<typename T>
     Tensor<T> get_tensor(int layer, const std::string& name);
 };
-
-inline bool is_q8f16(const std::string& quant) {
-    return quant == "Q8F16" || quant == "int8";  // "int8" = legacy .mog files
-}
 
 inline bool is_f16(const std::string& quant) {
     return quant == "f16";

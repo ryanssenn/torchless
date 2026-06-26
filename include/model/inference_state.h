@@ -1,7 +1,7 @@
 #pragma once
 #include "common/fp16.h"
 #include "common/tensor.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 
 inline size_t MAX_SEQ_LEN = 500;
 

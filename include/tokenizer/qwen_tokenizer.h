@@ -1,6 +1,5 @@
 #pragma once
 
-#include "loader/model_format.h"
 #include "tokenizer/bpe.h"
 #include "tokenizer/qwen_pre_tokenize.h"
 
@@ -15,7 +14,7 @@ struct QwenTokenizer : Bpe {
     mutable bool special_tokens_initialized = false;
     mutable std::vector<std::pair<std::string, uint32_t>> special_tokens;
 
-    void load(BinaryReader& reader, uint32_t format_version = model_format::FORMAT_VERSION);
+    void load(BinaryReader& reader);
 
     std::vector<uint32_t> encode(const std::string& text) const;
     std::string decode(const std::vector<uint32_t>& tokens) const;
@@ -23,6 +22,4 @@ struct QwenTokenizer : Bpe {
 private:
     const std::vector<std::pair<std::string, uint32_t>>& special_tokens_list() const;
     std::vector<uint32_t> bpe(const std::string& text) const;
-    std::vector<uint32_t> encode_text(const std::string& text) const;
-    std::string decode_text(const std::vector<uint32_t>& tokens) const;
 };

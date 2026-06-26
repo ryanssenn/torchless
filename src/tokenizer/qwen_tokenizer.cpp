@@ -61,14 +61,8 @@ bool is_special_token(const std::string& token) {
 
 // Loads vocab and merge rules from the MOG header.
 // MOG v2 stores a pre-tokenize regex that must match the hardcoded Qwen pattern.
-void QwenTokenizer::load(BinaryReader& reader, uint32_t format_version) {
+void QwenTokenizer::load(BinaryReader& reader) {
     Bpe::load(reader);
-
-    if (format_version < model_format::FORMAT_VERSION_V2) {
-        std::cerr << "Qwen tokenizer requires MOG v2 pre_tokenize_regex" << std::endl;
-        std::exit(1);
-    }
-
     QwenPreTokenizer::expect_pattern(reader.read_string());
 }
 
@@ -108,7 +102,7 @@ std::vector<uint32_t> QwenTokenizer::bpe(const std::string& text) const {
     return apply_merges(std::move(tokens));
 }
 
-std::vector<uint32_t> QwenTokenizer::encode_text(const std::string& text) const {
+std::vector<uint32_t> QwenTokenizer::encode(const std::string& text) const {
     std::vector<uint32_t> result;
 
     size_t pos = 0;
@@ -149,11 +143,7 @@ std::vector<uint32_t> QwenTokenizer::encode_text(const std::string& text) const 
     return result;
 }
 
-std::vector<uint32_t> QwenTokenizer::encode(const std::string& text) const {
-    return encode_text(text);
-}
-
-std::string QwenTokenizer::decode_text(const std::vector<uint32_t>& tokens) const {
+std::string QwenTokenizer::decode(const std::vector<uint32_t>& tokens) const {
     const auto& maps = byte_maps();
     std::string result;
 
@@ -184,8 +174,4 @@ std::string QwenTokenizer::decode_text(const std::vector<uint32_t>& tokens) cons
     }
 
     return result;
-}
-
-std::string QwenTokenizer::decode(const std::vector<uint32_t>& tokens) const {
-    return decode_text(tokens);
 }

@@ -1,7 +1,6 @@
 #include "setup/context.h"
 #include "common/fp16.h"
-#include "loader/model_format.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 
 #include <cstring>
 #include <fstream>
@@ -122,7 +121,7 @@ bool layer_tensor_wants_f16(const std::string& name, const std::string& quant, b
     return !layer_tensor_wants_int8(name, quant);
 }
 
-TensorVariant& resolve_tensor(Parameters& params, const std::string& key, int layer) {
+TensorVariant& resolve_tensor(ModelLoad& params, const std::string& key, int layer) {
     if (layer == -1) {
         return params.global_weights.at(key);
     }
@@ -255,7 +254,7 @@ int test_mog_header() {
 }
 
 int test_mog_config() {
-    const Config& c = get_params()->config;
+    const Config& c = get_model()->config;
 
     if (!expect_eq("hidden_size", c.hidden_size, size_t{4096})) return 1;
     if (!expect_eq("intermediate_size", c.intermediate_size, size_t{14336})) return 1;
@@ -283,7 +282,7 @@ int test_mog_config() {
 }
 
 int test_mog_tensor_inventory() {
-    const std::shared_ptr<Parameters> params = get_params();
+    const std::shared_ptr<ModelLoad> params = get_model();
     const std::string& quant = params->config.quant;
     const bool f16_aux = params->uses_f16_aux_weights();
 
@@ -375,7 +374,7 @@ int test_mog_tensor_inventory() {
 }
 
 int test_mog_weight_spotcheck() {
-    const std::shared_ptr<Parameters> params = get_params();
+    const std::shared_ptr<ModelLoad> params = get_model();
 
     for (const auto& entry : kWeightSpotChecks) {
         TensorVariant& v = resolve_tensor(*params, entry.key, entry.layer);

@@ -3,7 +3,7 @@
 
 
 int test_rope(){
-    std::shared_ptr<Parameters> params = get_params();
+    std::shared_ptr<ModelLoad> params = get_model();
     RotaryEmbedding::init_freq(infer, params->config);
 
     for (size_t i = 0; i<4; i++){

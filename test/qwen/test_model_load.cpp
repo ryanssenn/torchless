@@ -1,7 +1,6 @@
 #include "setup/context.h"
 #include "common/fp16.h"
-#include "loader/model_format.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 
 #include <cstring>
 #include <fstream>
@@ -98,7 +97,7 @@ bool check_shape(const std::string& name, const std::vector<size_t>& got,
     return true;
 }
 
-TensorVariant& resolve_tensor(Parameters& params, const std::string& key, int layer) {
+TensorVariant& resolve_tensor(ModelLoad& params, const std::string& key, int layer) {
     if (layer == -1) {
         return params.global_weights.at(key);
     }
@@ -204,9 +203,9 @@ int test_mog_header() {
 
     uint32_t version;
     std::memcpy(&version, prefix + 4, sizeof(version));
-    if (version != model_format::FORMAT_VERSION_V2) {
+    if (version != model_format::FORMAT_VERSION) {
         std::cerr << "format version mismatch: got " << version
-                  << ", want " << model_format::FORMAT_VERSION_V2 << "\n";
+                  << ", want " << model_format::FORMAT_VERSION << "\n";
         return 1;
     }
 
@@ -225,10 +224,10 @@ int test_mog_header() {
     return 0;
 }
 
-// Checks that Parameters parsed the config KV for Qwen3-0.6B: architecture, dims,
+// Checks that ModelLoad parsed the config KV for Qwen3-0.6B: architecture, dims,
 // rope/norm settings, f16 quant, tied embeddings, and special token ids.
 int test_mog_config() {
-    const Config& c = get_params()->config;
+    const Config& c = get_model()->config;
 
     if (c.architecture != "qwen3") {
         std::cerr << "architecture mismatch: got " << c.architecture << ", want qwen3\n";
@@ -273,7 +272,7 @@ int test_mog_tokenizer_metadata() {
 // Verifies the tensor table: 28 layers x 11 weights (incl. q_norm/k_norm), two
 // global f16 tensors (embed + norm, no lm_head when tied), and expected shapes/dtypes.
 int test_mog_tensor_inventory() {
-    const std::shared_ptr<Parameters> params = get_params();
+    const std::shared_ptr<ModelLoad> params = get_model();
 
     if (!expect_eq("global tensor count", params->global_weights.size(), size_t{2})) {
         return 1;
@@ -349,7 +348,7 @@ int test_mog_tensor_inventory() {
 // Spot-checks first/last f16 values at known payload offsets on a few tensors
 // (layers 0 and 27). Confirms mmap offsets and f16 decode, not just header layout.
 int test_mog_weight_spotcheck() {
-    const std::shared_ptr<Parameters> params = get_params();
+    const std::shared_ptr<ModelLoad> params = get_model();
     constexpr float atol = 1e-3f;
 
     for (const auto& entry : kWeightSpotChecks) {

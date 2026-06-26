@@ -3,7 +3,7 @@
 namespace {
 
 bool expect_ids(const std::string& text, const std::vector<uint32_t>& expected) {
-    std::vector<uint32_t> got = get_params()->tokenizer.encode(text);
+    std::vector<uint32_t> got = get_model()->tokenizer.encode(text);
 
     if (got != expected) {
         std::cout << "tokenizer ids mismatch for: " << text << std::endl;
@@ -16,7 +16,7 @@ bool expect_ids(const std::string& text, const std::vector<uint32_t>& expected) 
         return false;
     }
 
-    std::string decoded = get_params()->tokenizer.decode(got);
+    std::string decoded = get_model()->tokenizer.decode(got);
     if (decoded != text) {
         std::cout << "tokenizer roundtrip mismatch for: " << text << std::endl;
         std::cout << "decoded: " << decoded << std::endl;

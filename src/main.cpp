@@ -1,6 +1,6 @@
 #include <iostream>
 #include "common/fp16.h"
-#include "loader/parameters.h"
+#include "loader/model_load.h"
 #include "model/modules.h"
 #include <random>
 #include <chrono>
@@ -88,7 +88,7 @@ uint32_t generate(
 }
 
 template <typename TMatmul, typename TAux>
-void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, const std::vector<uint32_t>& got, float temp) {
+void run_inference(std::shared_ptr<ModelLoad> params, InferenceState& infer, const std::vector<uint32_t>& got, float temp) {
     Model<TMatmul, TAux> model(params);
     RotaryEmbedding::init_freq(infer, params->config);
 
@@ -133,7 +133,7 @@ void run_inference(std::shared_ptr<Parameters> params, InferenceState& infer, co
 // Teacher-forced perplexity over the prompt tokens using the actual engine.
 // PPL = exp( mean_i -log softmax(logits_i)[token_{i+1}] ).
 template <typename TMatmul, typename TAux>
-void run_perplexity(std::shared_ptr<Parameters> params, InferenceState& infer, const std::vector<uint32_t>& tokens) {
+void run_perplexity(std::shared_ptr<ModelLoad> params, InferenceState& infer, const std::vector<uint32_t>& tokens) {
     Model<TMatmul, TAux> model(params);
     RotaryEmbedding::init_freq(infer, params->config);
     infer.pos = 0;
@@ -191,8 +191,8 @@ int main(int argc, char** argv) {
     std::string model_path = positional[0];
     std::string text = positional[1];
 
-    std::shared_ptr<Parameters> params = std::make_shared<Parameters>();
-    params->load_parameters(model_path);
+    std::shared_ptr<ModelLoad> params = std::make_shared<ModelLoad>();
+    params->load(model_path);
 
     InferenceState infer(params->config);
     std::vector<uint32_t> got = params->tokenizer.encode(text);
@@ -200,24 +200,21 @@ int main(int argc, char** argv) {
     if (ppl) {
         if (params->config.quant == "f32") {
             run_perplexity<float, float>(params, infer, got);
-        } else if (is_q8f16(params->config.quant)) {
-            if (params->uses_f16_aux_weights()) {
-                run_perplexity<int8_t, fp16_t>(params, infer, got);
-            } else {
-                run_perplexity<int8_t, float>(params, infer, got);
-            }
+        } else {
+            std::cerr << "unsupported quant for perplexity: " << params->config.quant << std::endl;
+            return 1;
         }
         return 0;
     }
 
     if (params->config.quant == "f32") {
         run_inference<float, float>(params, infer, got, temp);
-    } else if (is_q8f16(params->config.quant)) {
-        if (params->uses_f16_aux_weights()) {
-            run_inference<int8_t, fp16_t>(params, infer, got, temp);
-        } else {
-            run_inference<int8_t, float>(params, infer, got, temp);
-        }
+    } else if (is_f16(params->config.quant)) {
+        std::cerr << "f16 inference not yet implemented" << std::endl;
+        return 1;
+    } else {
+        std::cerr << "unsupported quant: " << params->config.quant << std::endl;
+        return 1;
     }
 
     return 0;

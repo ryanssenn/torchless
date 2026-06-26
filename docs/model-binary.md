@@ -2,7 +2,7 @@
 
 MOG (Model Object Graph) is the single-file format loaded by qmog.cpp. One `.mog` file contains the runtime config, tokenizer data, tensor index, and raw weight payload.
 
-The C++ loader is `Parameters::load_parameters()` in `src/loader/parameters.cpp`. It memory-maps the file and exposes tensor views into the payload. The weight bytes are not copied into heap memory.
+The C++ loader is `ModelLoad::load()` in `src/loader/model_load.cpp`. It memory-maps the file and exposes tensor views into the payload. The weight bytes are not copied into heap memory.
 
 ## File layout
 
@@ -24,10 +24,10 @@ All multi-byte integers are little-endian.
 | Offset | Size | Field | Meaning |
 | ------ | ---- | ----- | ------- |
 | 0 | 4 | magic | `MOG\0` |
-| 4 | 4 | version | `1` or `2` |
+| 4 | 4 | version | `2` |
 | 8 | 8 | header_size | header length in bytes |
 
-The current loader accepts versions `1` through `2`.
+The loader accepts MOG version `2` only.
 
 Payload start:
 
@@ -247,7 +247,7 @@ read tensor table
 create tensor views into payload
 ```
 
-After load, `Parameters` owns:
+After load, `ModelLoad` owns:
 
 - `config`
 - `tokenizer`
@@ -261,7 +261,7 @@ The runtime uses `get_tensor(layer, name)` to retrieve typed tensor views from t
 | Topic | Detail |
 | ----- | ------ |
 | Magic | `MOG\0` |
-| Supported versions | `1`, `2` |
+| Supported versions | `2` |
 | Header encoding | little-endian binary |
 | String encoding | `u32` byte length + UTF-8 |
 | Payload alignment | 64 bytes |
