@@ -45,7 +45,7 @@ void load_expected_values(){
                 data.push_back(x);
                 i++;
             }
-            expected.emplace(name, Tensor<float>(arena, data, {i}));
+            expected.emplace(name, make_f32_tensor(arena, data, {i}));
         }
     };
 
@@ -57,8 +57,9 @@ bool has_logits_golden(){
     return expected.find("logits_sky_step0_top10_ids") != expected.end();
 }
 
-TopK get_topk(const Tensor<float>& logits, size_t k){
+TopK get_topk(const Tensor& logits, size_t k){
     TopK result;
+    const float* data = logits.f32();
     std::vector<bool> used(logits.numel, false);
 
     for (size_t n = 0; n < k; n++){
@@ -66,8 +67,8 @@ TopK get_topk(const Tensor<float>& logits, size_t k){
         size_t best_i = 0;
 
         for (size_t i = 0; i < logits.numel; i++){
-            if (!used[i] && logits.data[i] > best){
-                best = logits.data[i];
+            if (!used[i] && data[i] > best){
+                best = data[i];
                 best_i = i;
             }
         }
@@ -82,7 +83,7 @@ TopK get_topk(const Tensor<float>& logits, size_t k){
 
 static float equals_atol(){
     if (is_q8f16(get_model()->config.quant)) {
-        return 1.1e-1f; // worst pre-L31 layer ~0.106 (sky L29)
+        return 1.1e-1f;
     }
     return 5e-2f;
 }
@@ -91,20 +92,22 @@ bool equals(float x, float y){
     return std::fabs(x - y) < equals_atol();
 }
 
-bool equals(const Tensor<float>& x, const Tensor<float>& y){
+bool equals(const Tensor& x, const Tensor& y){
     return equals(x, y, equals_atol());
 }
 
-bool equals(const Tensor<float>& x, const Tensor<float>& y, float atol){
+bool equals(const Tensor& x, const Tensor& y, float atol){
     if (x.numel != y.numel){
         return false;
     }
 
-    for (int i=0; i<x.numel; i++){
-        if (std::fabs(x.data[i] - y.data[i]) >= atol){
+    const float* x_data = x.f32();
+    const float* y_data = y.f32();
+    for (size_t i=0; i<x.numel; i++){
+        if (std::fabs(x_data[i] - y_data[i]) >= atol){
             std::cout << "Mismatch at pos " << i
-                      << ": expected " << y.data[i]
-                      << ", got " << x.data[i] << std::endl;
+                      << ": expected " << y_data[i]
+                      << ", got " << x_data[i] << std::endl;
             return false;
         }
     }

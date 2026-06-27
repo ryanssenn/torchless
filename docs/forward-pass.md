@@ -60,13 +60,14 @@ Each tensor entry says:
 
 Layer weights are routed into `layer_weights[layer]`. Global weights, such as embeddings or final norm, go into `global_weights`.
 
-The tensors are stored as:
+The tensors are stored as non-owning `Tensor` views with a per-tensor `DType` tag (`F32`, `INT8`, or `F16`):
 
 ```cpp
-std::variant<Tensor<float>, Tensor<int8_t>, Tensor<fp16_t>>
+std::unordered_map<std::string, Tensor> global_weights;
+std::vector<std::unordered_map<std::string, Tensor>> layer_weights;
 ```
 
-That lets the same loader represent f32, int8, and f16 weights.
+That lets the same loader represent f32, int8, and f16 weights without templates.
 
 ## 4. The prompt becomes token ids
 
@@ -112,14 +113,11 @@ The KV cache is important. It stores prior keys and values so each new token can
 
 ## 6. The model is constructed
 
-The runtime selects a model template based on quantization.
+```cpp
+Model model(params);
+```
 
-For example:
-
-- f32 uses `Model<float, float>`
-- f16 inference is not yet implemented in the CLI
-
-`Model` is defined in `include/model/modules.h` and implemented in `src/model/mistral/modules.cpp`.
+`Model` is defined in `include/model/model.h` and implemented in `src/model/model.cpp`.
 
 It owns:
 
@@ -163,7 +161,7 @@ After this call, `infer.logits` contains one score per vocabulary token.
 `Embedding::forward()` looks up one row in the embedding table:
 
 ```cpp
-Tensor<TAux> row = table.at({token_id});
+Tensor row = table.at({token_id});
 ```
 
 It copies that row into `infer.hidden_state`.
@@ -241,7 +239,7 @@ Each value is an unnormalized score for one possible next token.
 
 ## 14. Sampling picks the next token
 
-`generate()` in `src/main.cpp` calls the model forward pass, applies a repetition penalty, then samples.
+`main.cpp` calls the model forward pass, then samples the next token.
 
 If `--temp 0`, it uses greedy decoding:
 

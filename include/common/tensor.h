@@ -1,61 +1,77 @@
 #pragma once
-#include <string>
-#include <vector>
+
+#include "common/arena.h"
+#include "common/dtype.h"
+#include "common/shape.h"
+
+#include <array>
+#include <cassert>
 #include <cstdint>
 #include <initializer_list>
-#include <cassert>
-#include <memory>
+#include <vector>
 
-struct Arena {
-    size_t BUFFER_SIZE;
-    char* buffer;
-    size_t offset = 0;
-
-    Arena(size_t BUFFER_SIZE) : BUFFER_SIZE(BUFFER_SIZE), buffer(new char[BUFFER_SIZE]) {}
-
-    void* allocate(size_t size){
-        assert(offset + size < BUFFER_SIZE && "Tensor allocator out of memory");
-        char* result = buffer + offset;
-        offset += size;
-
-        return result;
-    }
-
-    ~Arena(){
-        delete[] buffer;
-    }
-};
-
-
-template <typename T>
+// Non-owning view into memory owned by Arena (activations) or mmap (weights).
+// Tensor never allocates or frees storage.
 struct Tensor {
-    std::vector<size_t> shape;
+    DType dtype = DType::F32;
+    void* data = nullptr;
+    size_t numel = 0;
 
-    size_t numel;
-    size_t type_size = sizeof(T);
+    uint8_t ndim = 0;
+    std::array<size_t, 4> shape{};
+    std::array<size_t, 4> strides{};
 
-    T* data;
-    std::vector<size_t> strides;
+    // INT8 weights only; empty for F32/F16
     std::vector<float> scales;
 
+    // Wrap existing memory with the given dtype and dimensions.
+    static Tensor from_ptr(void* data, DType dtype, std::initializer_list<size_t> dims);
+    // Wrap existing memory with per-element INT8 dequant scales.
+    static Tensor from_ptr(void* data, DType dtype, std::vector<float> scales, std::initializer_list<size_t> dims);
+    // Wrap existing memory using a pre-built Shape.
+    static Tensor from_ptr(void* data, DType dtype, const Shape& shape);
+    // Wrap existing memory with scales using a pre-built Shape.
+    static Tensor from_ptr(void* data, DType dtype, std::vector<float> scales, const Shape& shape);
 
-    size_t get_numel() const;
-    void init_strides();
+    // Allocate fresh storage from arena and return a view into it.
+    static Tensor alloc(Arena& arena, DType dtype, std::initializer_list<size_t> dims);
 
-    Tensor() {}
-    Tensor(T* data, const std::vector<size_t>& shape);
-    Tensor(Arena& arena, const std::vector<size_t>& shape);
-    Tensor(Arena& arena, const std::vector<float>& arr, const std::vector<size_t>& shape);
+    // Element size in bytes for this tensor's dtype.
+    size_t type_size() const { return dtype_size(dtype); }
+    // Total storage size in bytes.
+    size_t byte_size() const { return numel * type_size(); }
+    // True when elements are laid out contiguously in row-major order.
+    bool is_contiguous() const { return true; }
 
-    // Quantized
-    Tensor(T* data, const std::vector<float>& scales, const std::vector<size_t>& shape);
+    // Typed data pointer; asserts dtype is F32.
+    float* f32() const;
+    // Typed data pointer; asserts dtype is INT8.
+    int8_t* i8() const;
+    // Typed data pointer; asserts dtype is F16.
+    __fp16* f16() const;
 
-    void copy_from(const Tensor& tensor);
+    // Deprecated aliases for f32/i8/f16.
+    float* as_f32() const { return f32(); }
+    int8_t* as_i8() const { return i8(); }
+    __fp16* as_f16() const { return f16(); }
 
-    Tensor at(std::initializer_list<size_t> idx);
-    float max();
-
-    Tensor reshape(std::vector<size_t> new_shape);
-
+    // Read element i as F32, converting from the stored dtype if needed.
     float get(size_t i) const;
+    // Maximum element value; F32 only.
+    float max() const;
+
+    // Copy same-dtype elements from src into this tensor.
+    void copy_from(const Tensor& src);
+
+    // Subtensor view at the given leading indices.
+    Tensor at(std::initializer_list<size_t> idx) const;
+    // View the same data with a different shape; numel must match.
+    Tensor reshape(std::initializer_list<size_t> new_dims) const;
+    // Shrink a 1-D view to its first len elements.
+    Tensor view_prefix(size_t len) const;
+    // Shrink the leading dimension of a 2-D+ view to rows rows.
+    Tensor view_rows(size_t rows) const;
 };
+
+// Allocate an F32 tensor and copy arr into it (test helpers).
+Tensor make_f32_tensor(Arena& arena, const std::vector<float>& arr, std::initializer_list<size_t> dims);

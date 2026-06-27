@@ -1,5 +1,6 @@
 #include "loader/binary_reader.h"
 #include "loader/model_load.h"
+#include "common/shape.h"
 #include <iostream>
 #include <cstring>
 
@@ -80,18 +81,15 @@ void ModelLoad::load_config(BinaryReader& reader){
     }
 }
 
-void ModelLoad::load_tensor(std::unordered_map<std::string, WeightTensor>& m, char* p, const std::string& key, uint8_t dtype, const std::vector<size_t>& shape, uint64_t offset, uint64_t scale_offset, uint32_t scale_size){
-    if (dtype == static_cast<uint8_t>(model_format::DType::F32)){
-        Tensor<float> t = Tensor(reinterpret_cast<float*>(p + offset), shape);
-        m.insert({key, t});
-    }
-    else if (dtype == static_cast<uint8_t>(model_format::DType::INT8)){
+void ModelLoad::load_tensor(std::unordered_map<std::string, Tensor>& m, char* p, const std::string& key, uint8_t dtype, const std::vector<size_t>& shape, uint64_t offset, uint64_t scale_offset, uint32_t scale_size){
+    DType dt = dtype_from_file(dtype);
+    Shape s = Shape::from_dims(shape);
+    if (dt == DType::INT8) {
         float* scale_start = reinterpret_cast<float*>(p + scale_offset);
-        Tensor<int8_t> t = Tensor(reinterpret_cast<int8_t*>(p + offset), std::vector<float>(scale_start, scale_start + scale_size), shape);
+        Tensor t = Tensor::from_ptr(p + offset, dt, std::vector<float>(scale_start, scale_start + scale_size), s);
         m.insert({key, t});
-    }
-    else if (dtype == static_cast<uint8_t>(model_format::DType::F16)){
-        Tensor<fp16_t> t = Tensor(reinterpret_cast<fp16_t*>(p + offset), shape);
+    } else {
+        Tensor t = Tensor::from_ptr(p + offset, dt, s);
         m.insert({key, t});
     }
 }
@@ -186,29 +184,26 @@ void ModelLoad::load(const std::string& path){
     close(fd);
 }
 
-template<typename T>
-Tensor<T> ModelLoad::get_tensor(int layer, const std::string& name){
+Tensor& ModelLoad::get_tensor(int layer, const std::string& name){
     if (layer == -1){
         for (auto& e : global_weights){
             if (name == e.first){
-                return std::get<Tensor<T>>(e.second);
+                return e.second;
             }
         }
 
         assert(false && "tensor not found");
-        return {};
+        static Tensor empty;
+        return empty;
     }
 
     for (auto& e : layer_weights[layer]){
         if (name == e.first){
-            return std::get<Tensor<T>>(e.second);
+            return e.second;
         }
     }
 
     assert(false && "tensor not found");
-    return {};
+    static Tensor empty;
+    return empty;
 }
-
-template Tensor<float> ModelLoad::get_tensor<float>(int, const std::string&);
-template Tensor<int8_t> ModelLoad::get_tensor<int8_t>(int, const std::string&);
-template Tensor<fp16_t> ModelLoad::get_tensor<fp16_t>(int, const std::string&);

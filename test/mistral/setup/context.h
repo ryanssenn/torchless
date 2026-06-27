@@ -1,8 +1,10 @@
 #include <string>
 #include <iostream>
 #include "backend/kernels.h"
+#include "common/arena.h"
+#include "common/tensor.h"
 #include "loader/model_load.h"
-#include "model/modules.h"
+#include "model/model.h"
 
 struct TestCase {
     std::string name;
@@ -22,7 +24,7 @@ std::shared_ptr<ModelLoad> get_model();
 inline InferenceState infer(get_model()->config);
 inline Arena arena(4*1024*1024); // 4 MB
 
-inline std::unordered_map<std::string, Tensor<float>> expected;
+inline std::unordered_map<std::string, Tensor> expected;
 void load_expected_values();
 
 struct TopK {
@@ -30,9 +32,9 @@ struct TopK {
     std::vector<float> vals;
 };
 
-TopK get_topk(const Tensor<float>& logits, size_t k);
+TopK get_topk(const Tensor& logits, size_t k);
 bool has_logits_golden();
 
 bool equals(float x, float y);
-bool equals(const Tensor<float>& x, const Tensor<float>& y);
-bool equals(const Tensor<float>& x, const Tensor<float>& y, float atol);
+bool equals(const Tensor& x, const Tensor& y);
+bool equals(const Tensor& x, const Tensor& y, float atol);

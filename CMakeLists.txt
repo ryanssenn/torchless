@@ -2,37 +2,68 @@ cmake_minimum_required(VERSION 3.20)
 project(qmog.cpp CXX)
 
 set(CMAKE_CXX_STANDARD 17)
-
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -mcpu=native")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
-endif()
+set(QMOG_COMMON_SRC
+    src/common/shape.cpp
+    src/common/tensor.cpp
+)
 
-if(APPLE)
-    set(LIBOMP_ROOT "/opt/homebrew/opt/libomp")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xpreprocessor -fopenmp -I${LIBOMP_ROOT}/include")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L${LIBOMP_ROOT}/lib -lomp")
-else()
-    find_package(OpenMP REQUIRED)
-endif()
+set(QMOG_LOADER_SRC
+    src/loader/model_load.cpp
+)
 
-file(GLOB_RECURSE SRC CONFIGURE_DEPENDS "src/*.cpp")
-file(GLOB_RECURSE TEST_QWEN CONFIGURE_DEPENDS "test/qwen/*.cpp")
-list(REMOVE_ITEM SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
+set(QMOG_TOKENIZER_SRC
+    src/tokenizer/bpe.cpp
+    src/tokenizer/qwen_pre_tokenize.cpp
+    src/tokenizer/qwen_tokenizer.cpp
+)
 
-add_executable(qmog-cli src/main.cpp ${SRC})
-add_executable(test_exec ${SRC} ${TEST_QWEN})
+set(QMOG_MODEL_SRC
+    src/model/inference_state.cpp
+    src/model/model.cpp
+)
+
+set(QMOG_BACKEND_SRC
+    src/backend/cpu/kernels.cpp
+)
+
+set(QMOG_DECODE_SRC
+    src/decode/sampling.cpp
+)
+
+set(QMOG_EVAL_SRC
+    src/eval/perplexity.cpp
+)
+
+set(TEST_QWEN_SRC
+    test/qwen/main.cpp
+    test/qwen/setup/context.cpp
+    test/qwen/test_model_load.cpp
+    test/qwen/test_pre_tokenize.cpp
+    test/qwen/test_tokenizer.cpp
+)
+
+add_executable(qmog-cli
+    src/main.cpp
+    ${QMOG_COMMON_SRC}
+    ${QMOG_LOADER_SRC}
+    ${QMOG_TOKENIZER_SRC}
+    ${QMOG_MODEL_SRC}
+    ${QMOG_BACKEND_SRC}
+    ${QMOG_DECODE_SRC}
+    ${QMOG_EVAL_SRC}
+)
+
+add_executable(test_exec
+    ${QMOG_COMMON_SRC}
+    ${QMOG_LOADER_SRC}
+    ${QMOG_TOKENIZER_SRC}
+    ${TEST_QWEN_SRC}
+)
 
 target_include_directories(qmog-cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(test_exec PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/test/qwen
 )
-
-if(NOT APPLE)
-    target_link_libraries(qmog-cli PRIVATE OpenMP::OpenMP_CXX)
-    target_link_libraries(test_exec PRIVATE OpenMP::OpenMP_CXX)
-endif()

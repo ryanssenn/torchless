@@ -15,7 +15,7 @@ padding         0-63 bytes so the payload starts on a 64-byte boundary
 payload         raw tensor bytes
 ```
 
-The header is metadata. The payload is the large part of the file. Tensor entries in the header store byte offsets into the payload, so loading a tensor is just pointer arithmetic plus a `Tensor<T>` wrapper.
+The header is metadata. The payload is the large part of the file. Tensor entries in the header store byte offsets into the payload, so loading a tensor is just pointer arithmetic plus a non-owning `Tensor` view.
 
 ## File prefix
 
@@ -166,11 +166,11 @@ repeat count times:
 
 Tensor dtypes:
 
-| Type byte | Runtime tensor |
-| --------- | -------------- |
-| 0 | `Tensor<float>` |
-| 1 | `Tensor<int8_t>` |
-| 2 | `Tensor<fp16_t>` |
+| Type byte | Runtime dtype |
+| --------- | --------------- |
+| 0 | `DType::F32` |
+| 1 | `DType::INT8` |
+| 2 | `DType::F16` |
 
 For f32 and f16 tensors, `scale_offset` and `scale_size` are zero.
 
@@ -226,9 +226,9 @@ Each tensor is contiguous in row-major order. Exporters may add padding between 
 The loader wraps payload memory directly:
 
 ```cpp
-Tensor<float>(float* at offset, shape)
-Tensor<fp16_t>(fp16_t* at offset, shape)
-Tensor<int8_t>(int8_t* at offset, scales, shape)
+Tensor::from_ptr(float* at offset, DType::F32, shape)
+Tensor::from_ptr(fp16_t* at offset, DType::F16, shape)
+Tensor::from_ptr(int8_t* at offset, DType::INT8, scales, shape)
 ```
 
 The mmap must stay alive for the lifetime of these tensor views.

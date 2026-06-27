@@ -2,11 +2,9 @@
 
 **Experimental project under active development**.
 
-A compact C++ inference engine optimized for Apple platforms.
+An LLM inference engine optimized for Apple platforms, built entirely with C++ and Metal, with no external dependencies.
 
-Load a single model binary and run inference locally. No runtime dependencies. A small C++ codebase focused on readability and simplicity.
-
-Models are distributed as `.mog` files, a self-contained format that includes everything needed for inference. Pre-built models are available, or you can generate your own from a Hugging Face Qwen3 checkpoint using [qpack](https://github.com/ryanssenn/qpack).
+Load a single model file and run inference locally. Models are distributed as `.mog` files, a self-contained format containing model weights, configuration, and tokenizer data. Pre-built models are available, or you can generate your own from a Hugging Face checkpoint using [qpack](https://github.com/ryanssenn/qpack).
 
 ## Supported models
 

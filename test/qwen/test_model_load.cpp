@@ -1,15 +1,13 @@
 #include "setup/context.h"
-#include "common/fp16.h"
+#include "common/dtype.h"
+#include "common/shape.h"
 #include "loader/model_load.h"
 
 #include <cstring>
 #include <fstream>
-#include <variant>
 #include <vector>
 
 namespace {
-
-using TensorVariant = std::variant<Tensor<float>, Tensor<int8_t>, Tensor<fp16_t>>;
 
 std::string resolve_model_path() {
     std::string model_path = "qwen3-0.6B.mog";
@@ -36,40 +34,6 @@ bool expect_near(const char* field, float got, float want, float atol) {
     return true;
 }
 
-std::vector<size_t> tensor_shape(const TensorVariant& v) {
-    if (std::holds_alternative<Tensor<float>>(v)) {
-        return std::get<Tensor<float>>(v).shape;
-    }
-    if (std::holds_alternative<Tensor<fp16_t>>(v)) {
-        return std::get<Tensor<fp16_t>>(v).shape;
-    }
-    return std::get<Tensor<int8_t>>(v).shape;
-}
-
-size_t tensor_numel(const TensorVariant& v) {
-    if (std::holds_alternative<Tensor<float>>(v)) {
-        return std::get<Tensor<float>>(v).get_numel();
-    }
-    if (std::holds_alternative<Tensor<fp16_t>>(v)) {
-        return std::get<Tensor<fp16_t>>(v).get_numel();
-    }
-    return std::get<Tensor<int8_t>>(v).get_numel();
-}
-
-bool is_fp16_tensor(const TensorVariant& v) {
-    return std::holds_alternative<Tensor<fp16_t>>(v);
-}
-
-float tensor_get(const TensorVariant& v, size_t i) {
-    if (std::holds_alternative<Tensor<float>>(v)) {
-        return std::get<Tensor<float>>(v).get(i);
-    }
-    if (std::holds_alternative<Tensor<fp16_t>>(v)) {
-        return std::get<Tensor<fp16_t>>(v).get(i);
-    }
-    return std::get<Tensor<int8_t>>(v).get(i);
-}
-
 size_t shape_product(const std::vector<size_t>& shape) {
     size_t n = 1;
     for (size_t d : shape) {
@@ -78,13 +42,13 @@ size_t shape_product(const std::vector<size_t>& shape) {
     return n;
 }
 
-bool check_shape(const std::string& name, const std::vector<size_t>& got,
+bool check_shape(const std::string& name, const Tensor& t,
                  const std::vector<size_t>& want) {
-    if (got != want) {
+    if (!shape_equals(t, want)) {
         std::cerr << name << " shape mismatch: got [";
-        for (size_t i = 0; i < got.size(); ++i) {
+        for (uint8_t i = 0; i < t.ndim; ++i) {
             if (i) std::cerr << ", ";
-            std::cerr << got[i];
+            std::cerr << t.shape[i];
         }
         std::cerr << "], want [";
         for (size_t i = 0; i < want.size(); ++i) {
@@ -97,7 +61,7 @@ bool check_shape(const std::string& name, const std::vector<size_t>& got,
     return true;
 }
 
-TensorVariant& resolve_tensor(ModelLoad& params, const std::string& key, int layer) {
+Tensor& resolve_tensor(ModelLoad& params, const std::string& key, int layer) {
     if (layer == -1) {
         return params.global_weights.at(key);
     }
@@ -296,16 +260,16 @@ int test_mog_tensor_inventory() {
         }
 
         for (const auto& spec : kLayerShapeSpecs) {
-            const TensorVariant& v = weights.at(spec.first);
-            if (!check_shape(spec.first, tensor_shape(v), spec.second)) {
+            const Tensor& t = weights.at(spec.first);
+            if (!check_shape(spec.first, t, spec.second)) {
                 std::cerr << "  at layer " << layer << "\n";
                 return 1;
             }
-            if (tensor_numel(v) != shape_product(spec.second)) {
+            if (t.numel != shape_product(spec.second)) {
                 std::cerr << spec.first << " numel mismatch at layer " << layer << "\n";
                 return 1;
             }
-            if (!is_fp16_tensor(v)) {
+            if (t.dtype != DType::F16) {
                 std::cerr << spec.first << " should be f16 at layer " << layer << "\n";
                 return 1;
             }
@@ -320,15 +284,15 @@ int test_mog_tensor_inventory() {
     }
 
     for (const auto& spec : kGlobalShapeSpecs) {
-        const TensorVariant& v = params->global_weights.at(spec.first);
-        if (!check_shape(spec.first, tensor_shape(v), spec.second)) {
+        const Tensor& t = params->global_weights.at(spec.first);
+        if (!check_shape(spec.first, t, spec.second)) {
             return 1;
         }
-        if (tensor_numel(v) != shape_product(spec.second)) {
+        if (t.numel != shape_product(spec.second)) {
             std::cerr << spec.first << " numel mismatch\n";
             return 1;
         }
-        if (!is_fp16_tensor(v)) {
+        if (t.dtype != DType::F16) {
             std::cerr << spec.first << " should be f16\n";
             return 1;
         }
@@ -339,8 +303,8 @@ int test_mog_tensor_inventory() {
         return 1;
     }
 
-    (void)params->get_tensor<fp16_t>(0, "self_attn.q_proj.weight");
-    (void)params->get_tensor<fp16_t>(-1, "model.embed_tokens.weight");
+    (void)params->get_tensor(0, "self_attn.q_proj.weight");
+    (void)params->get_tensor(-1, "model.embed_tokens.weight");
 
     return 0;
 }
@@ -352,11 +316,11 @@ int test_mog_weight_spotcheck() {
     constexpr float atol = 1e-3f;
 
     for (const auto& entry : kWeightSpotChecks) {
-        TensorVariant& v = resolve_tensor(*params, entry.key, entry.layer);
-        const size_t n = tensor_numel(v);
+        Tensor& t = resolve_tensor(*params, entry.key, entry.layer);
+        const size_t n = t.numel;
 
-        const float first_val = tensor_get(v, 0);
-        const float last_val = tensor_get(v, n - 1);
+        const float first_val = t.get(0);
+        const float last_val = t.get(n - 1);
 
         if (!expect_near("first val", first_val, entry.first, atol)) {
             std::cerr << entry.key;

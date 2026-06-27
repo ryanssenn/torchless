@@ -54,9 +54,6 @@ jobs:
           fi
           echo "Using model ($(du -h "${{ env.MODEL_MOG }}" | cut -f1))"
 
-      - name: Install build dependencies
-        run: brew install libomp pkg-config
-
       - name: Build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release

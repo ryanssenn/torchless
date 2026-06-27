@@ -1,5 +1,4 @@
 #include "setup/context.h"
-#include "common/fp16.h"
 #include "loader/model_load.h"
 #include <unordered_map>
 
@@ -11,12 +10,12 @@ static const std::unordered_map<std::string, std::string> PROMPTS = {
     {"paris", "Paris is the capital of"},
 };
 
-// Count how many of the Q8F16 top-k token ids also appear in the golden top-k.
-static size_t topk_overlap(const TopK& got, const Tensor<float>& exp_ids) {
+static size_t topk_overlap(const TopK& got, const Tensor& exp_ids) {
+    const float* ids = exp_ids.f32();
     size_t overlap = 0;
     for (uint32_t id : got.ids) {
         for (size_t j = 0; j < exp_ids.numel; j++) {
-            if (static_cast<uint32_t>(exp_ids.data[j]) == id) {
+            if (static_cast<uint32_t>(ids[j]) == id) {
                 overlap++;
                 break;
             }
@@ -25,26 +24,21 @@ static size_t topk_overlap(const TopK& got, const Tensor<float>& exp_ids) {
     return overlap;
 }
 
-// Max abs logit error over ranks whose token id matches the golden at the same rank.
-static float aligned_value_error(const TopK& got, const Tensor<float>& exp_ids,
-                                 const Tensor<float>& exp_vals) {
+static float aligned_value_error(const TopK& got, const Tensor& exp_ids, const Tensor& exp_vals) {
+    const float* ids = exp_ids.f32();
+    const float* vals = exp_vals.f32();
     float max_err = 0.0f;
     for (size_t i = 0; i < got.ids.size() && i < exp_ids.numel; i++) {
-        if (got.ids[i] == static_cast<uint32_t>(exp_ids.data[i])) {
-            max_err = std::max(max_err, std::fabs(got.vals[i] - exp_vals.data[i]));
+        if (got.ids[i] == static_cast<uint32_t>(ids[i])) {
+            max_err = std::max(max_err, std::fabs(got.vals[i] - vals[i]));
         }
     }
     return max_err;
 }
 
-// Teacher-forced divergence report: at every step we feed the golden top-1
-// token, so the Q8F16 model always sees the exact golden context. This isolates
-// per-step logit error instead of letting trajectories drift apart.
-// Pass/fail: Q8F16 requires full top-10 set and max logit error < 0.1.
-template <typename TMatmul, typename TAux>
 static int run_logits_prompt(const std::string& prefix) {
     std::shared_ptr<ModelLoad> params = get_model();
-    Model<TMatmul, TAux> model(params);
+    Model model(params);
 
     auto it = PROMPTS.find(prefix);
     if (it == PROMPTS.end()) {
@@ -53,7 +47,6 @@ static int run_logits_prompt(const std::string& prefix) {
     }
 
     std::vector<uint32_t> tokens = params->tokenizer.encode(it->second);
-    RotaryEmbedding::init_freq(infer, params->config);
     infer.pos = 0;
 
     for (size_t i = 0; i + 1 < tokens.size(); i++) {
@@ -74,16 +67,16 @@ static int run_logits_prompt(const std::string& prefix) {
             return 1;
         }
 
-        const Tensor<float>& exp_ids = expected.at(ids_key);
-        const Tensor<float>& exp_vals = expected.at(vals_key);
+        const Tensor& exp_ids = expected.at(ids_key);
+        const Tensor& exp_vals = expected.at(vals_key);
 
-        uint32_t exp_top1 = static_cast<uint32_t>(exp_ids.data[0]);
+        uint32_t exp_top1 = static_cast<uint32_t>(exp_ids.f32()[0]);
         bool top1_match = !got.ids.empty() && got.ids[0] == exp_top1;
         size_t overlap = topk_overlap(got, exp_ids);
         float max_err = aligned_value_error(got, exp_ids, exp_vals);
 
         std::cout << "  [" << prefix << "] step " << step
-                  << " top1 golden=" << exp_top1 << "(" << exp_vals.data[0] << ")"
+                  << " top1 golden=" << exp_top1 << "(" << exp_vals.f32()[0] << ")"
                   << " Q8F16=" << (got.ids.empty() ? 0 : got.ids[0])
                   << "(" << (got.vals.empty() ? 0.0f : got.vals[0]) << ")"
                   << " | top1=" << (top1_match ? "OK" : "FLIP")
@@ -91,7 +84,6 @@ static int run_logits_prompt(const std::string& prefix) {
                   << " max_val_err=" << max_err
                   << std::endl;
 
-        // Q8F16 vs bf16 HF goldens: same top-10 set and close logit values.
         bool step_ok = top1_match;
         if (is_q8f16(params->config.quant)) {
             step_ok = overlap + 1 >= LOGITS_TOPK && max_err < 1.5e-1f;
@@ -104,14 +96,12 @@ static int run_logits_prompt(const std::string& prefix) {
             break;
         }
 
-        // Teacher forcing: follow the golden trajectory, not int8's own pick.
         t = exp_top1;
     }
 
     return failed;
 }
 
-template <typename TMatmul, typename TAux>
 static int test_logits_multi() {
     if (!has_logits_golden()) {
         std::cout << "Skipping logits tests (missing test/mistral/logits_expected.txt). "
@@ -121,31 +111,29 @@ static int test_logits_multi() {
 
     int failed = 0;
     for (const auto& entry : PROMPTS) {
-        if (run_logits_prompt<TMatmul, TAux>(entry.first) != 0) {
+        if (run_logits_prompt(entry.first) != 0) {
             failed = 1;
         }
     }
     return failed;
 }
 
-// Per-layer atol for layer-stack checks (int8 vs bf16 HF goldens).
 static float layer_stack_atol(const std::string& quant, size_t layer, size_t n_layers, bool is_norm) {
     if (!is_q8f16(quant)) {
         return 5e-2f;
     }
     if (is_norm) {
-        return 7.2e-1f; // sky ~0.71, paris ~0.58
+        return 7.2e-1f;
     }
     if (layer + 1 == n_layers) {
-        return 4.2e-1f; // L31 ~0.30–0.39
+        return 4.2e-1f;
     }
-    return 1.5e-1f; // L0–L30, worst ~0.11 (L29 sky)
+    return 1.5e-1f;
 }
 
-template <typename TMatmul, typename TAux>
 static int run_layer_stack_prompt(const std::string& prefix) {
     std::shared_ptr<ModelLoad> params = get_model();
-    Model<TMatmul, TAux> model(params);
+    Model model(params);
 
     auto it = PROMPTS.find(prefix);
     if (it == PROMPTS.end()) {
@@ -153,7 +141,6 @@ static int run_layer_stack_prompt(const std::string& prefix) {
     }
 
     std::vector<uint32_t> tokens = params->tokenizer.encode(it->second);
-    RotaryEmbedding::init_freq(infer, params->config);
     infer.pos = 0;
 
     for (size_t i = 0; i + 1 < tokens.size(); i++) {
@@ -191,7 +178,6 @@ static int run_layer_stack_prompt(const std::string& prefix) {
     return 0;
 }
 
-template <typename TMatmul, typename TAux>
 static int test_layer_stack() {
     if (expected.find("layer_stack_sky_L0") == expected.end()) {
         std::cout << "Skipping layer stack tests (regenerate with DUMP_LAYER_STACK=1). "
@@ -200,19 +186,12 @@ static int test_layer_stack() {
     }
 
     for (const auto& entry : PROMPTS) {
-        if (run_layer_stack_prompt<TMatmul, TAux>(entry.first) != 0) {
+        if (run_layer_stack_prompt(entry.first) != 0) {
             return 1;
         }
     }
     return 0;
 }
 
-static int test_logits_multi_int8() {
-    return test_logits_multi<int8_t, fp16_t>();
-}
-static int test_layer_stack_int8() {
-    return test_layer_stack<int8_t, fp16_t>();
-}
-
-RegisterTest logits_multi_reg_q8f16("test logits multi top10", "Q8F16", &test_logits_multi_int8);
-RegisterTest layer_stack_reg_q8f16("test layer stack prefill", "Q8F16", &test_layer_stack_int8);
+RegisterTest logits_multi_reg_q8f16("test logits multi top10", "Q8F16", &test_logits_multi);
+RegisterTest layer_stack_reg_q8f16("test layer stack prefill", "Q8F16", &test_layer_stack);

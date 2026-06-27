@@ -3,21 +3,14 @@
 #include <cstdint>
 #include <unordered_map>
 #include <string>
-#include "common/fp16.h"
+#include "common/dtype.h"
 #include "common/tensor.h"
 #include "tokenizer/qwen_tokenizer.h"
-#include <variant>
 
 namespace model_format {
 
 constexpr char MAGIC[4] = {'M', 'O', 'G', '\0'};
 constexpr uint32_t FORMAT_VERSION = 2;
-
-enum class DType : uint8_t {
-    F32 = 0,
-    INT8 = 1,
-    F16 = 2,
-};
 
 enum class ConfigValueType : uint8_t {
     STRING = 0,
@@ -50,26 +43,27 @@ struct Config {
 
 class BinaryReader;
 
-using WeightTensor = std::variant<Tensor<float>, Tensor<int8_t>, Tensor<fp16_t>>;
-
 struct ModelLoad {
     Config config;
     QwenTokenizer tokenizer;
 
-    std::unordered_map<std::string, WeightTensor> global_weights;
-    std::vector<std::unordered_map<std::string, WeightTensor>> layer_weights;
+    std::unordered_map<std::string, Tensor> global_weights;
+    std::vector<std::unordered_map<std::string, Tensor>> layer_weights;
 
     static void* map_file(int fd, size_t& size);
-    void load_tensor(std::unordered_map<std::string, WeightTensor>& m, char* p, const std::string& key, uint8_t dtype, const std::vector<size_t>& shape, uint64_t offset, uint64_t scale_offset, uint32_t scale_size);
+    void load_tensor(std::unordered_map<std::string, Tensor>& m, char* p, const std::string& key, uint8_t dtype, const std::vector<size_t>& shape, uint64_t offset, uint64_t scale_offset, uint32_t scale_size);
 
     void load_config(BinaryReader& reader);
     void load_weights(char* p, BinaryReader& reader);
     void load(const std::string& path);
 
-    template<typename T>
-    Tensor<T> get_tensor(int layer, const std::string& name);
+    Tensor& get_tensor(int layer, const std::string& name);
 };
 
 inline bool is_f16(const std::string& quant) {
     return quant == "f16";
+}
+
+inline bool is_q8f16(const std::string& quant) {
+    return quant == "Q8F16" || quant == "q8f16";
 }

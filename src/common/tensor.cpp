@@ -1,106 +1,158 @@
-#include "common/fp16.h"
 #include "common/tensor.h"
+
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 
-template <typename T>
-size_t Tensor<T>::get_numel() const {
-    size_t s = 1;
-    for (size_t d : shape) {
-        assert(d > 0 && "dim=0 not supported");
-        s *= d;
-    }
-    return s;
+// Build a Tensor view from raw fields and optional INT8 scales.
+static Tensor make_tensor(void* data, DType dtype, const Shape& shape, std::vector<float> scales = {}) {
+    Tensor t;
+    t.dtype = dtype;
+    t.data = data;
+    t.ndim = shape.ndim;
+    t.shape = shape.dims;
+    t.numel = numel_from_shape(shape);
+    init_strides(t.strides, shape);
+    t.scales = std::move(scales);
+    return t;
 }
 
-template <typename T>
-void Tensor<T>::init_strides() {
-    strides.assign(shape.size(), 1);
-    if (shape.size() < 2) return;
-    size_t stride = 1;
-    for (int i = shape.size() - 2; i >= 0; --i) {
-        stride *= shape[i+1];
-        strides[i] = stride;
-    }
+// Wrap existing memory with the given dtype and dimensions.
+Tensor Tensor::from_ptr(void* data, DType dtype, std::initializer_list<size_t> dims) {
+    return from_ptr(data, dtype, Shape::from_dims(dims));
 }
 
-template <typename T>
-Tensor<T>::Tensor(T* data, const std::vector<size_t>& shape) : shape(shape), numel(get_numel()), data(data){
-    init_strides();
+// Wrap existing memory with per-element INT8 dequant scales.
+Tensor Tensor::from_ptr(void* data, DType dtype, std::vector<float> scales, std::initializer_list<size_t> dims) {
+    return from_ptr(data, dtype, std::move(scales), Shape::from_dims(dims));
 }
 
-template <typename T>
-Tensor<T>::Tensor(Arena& arena, const std::vector<size_t>& shape) : shape(shape), numel(get_numel()), data(static_cast<T*>(arena.allocate(numel*type_size))){
-    init_strides();
+// Wrap existing memory using a pre-built Shape.
+Tensor Tensor::from_ptr(void* data, DType dtype, const Shape& shape) {
+    return make_tensor(data, dtype, shape);
 }
 
-template <typename T>
-Tensor<T>::Tensor(Arena& arena, const std::vector<float>& arr, const std::vector<size_t>& shape) : shape(shape), numel(get_numel()), data(static_cast<T*>(arena.allocate(numel*type_size))){
-    init_strides();
-    std::copy(arr.begin(), arr.end(), data);
+// Wrap existing memory with scales using a pre-built Shape.
+Tensor Tensor::from_ptr(void* data, DType dtype, std::vector<float> scales, const Shape& shape) {
+    return make_tensor(data, dtype, shape, std::move(scales));
 }
 
-
-template <typename T>
-Tensor<T>::Tensor(T* data, const std::vector<float>& scales, const std::vector<size_t>& shape) : Tensor(data, shape) {
-    this->scales = scales;
+// Allocate fresh storage from arena and return a view into it.
+Tensor Tensor::alloc(Arena& arena, DType dtype, std::initializer_list<size_t> dims) {
+    Shape shape = Shape::from_dims(dims);
+    size_t bytes = numel_from_shape(shape) * dtype_size(dtype);
+    void* ptr = arena.allocate(bytes);
+    return make_tensor(ptr, dtype, shape);
 }
 
-
-template <typename T>
-void Tensor<T>::copy_from(const Tensor& tensor) {
-    std::memcpy(data, tensor.data, tensor.numel*type_size);
+// Allocate an F32 tensor and copy arr into it (test helpers).
+Tensor make_f32_tensor(Arena& arena, const std::vector<float>& arr, std::initializer_list<size_t> dims) {
+    Tensor t = Tensor::alloc(arena, DType::F32, dims);
+    assert(arr.size() == t.numel);
+    std::memcpy(t.data, arr.data(), t.byte_size());
+    return t;
 }
 
-template <typename T>
-Tensor<T> Tensor<T>::at(std::initializer_list<size_t> idx) {
-    assert(idx.size() <= shape.size() && "Too many indices for tensor");
-    T* new_data = data;
+// Typed data pointer; asserts dtype is F32.
+float* Tensor::f32() const {
+    assert(dtype == DType::F32);
+    return static_cast<float*>(data);
+}
 
-    int i = 0;
-    for (auto v : idx) {
+// Typed data pointer; asserts dtype is INT8.
+int8_t* Tensor::i8() const {
+    assert(dtype == DType::INT8);
+    return static_cast<int8_t*>(data);
+}
+
+// Typed data pointer; asserts dtype is F16.
+__fp16* Tensor::f16() const {
+    assert(dtype == DType::F16);
+    return static_cast<__fp16*>(data);
+}
+
+// Copy same-dtype elements from src into this tensor.
+void Tensor::copy_from(const Tensor& src) {
+    assert(dtype == src.dtype);
+    assert(numel == src.numel);
+    std::memcpy(data, src.data, byte_size());
+}
+
+// Subtensor view at the given leading indices.
+Tensor Tensor::at(std::initializer_list<size_t> idx) const {
+    assert(idx.size() <= ndim && "Too many indices for tensor");
+    char* new_data = static_cast<char*>(data);
+
+    uint8_t i = 0;
+    for (size_t v : idx) {
         assert(v < shape[i] && "Index out of range");
-        new_data += strides[i] * v;
+        new_data += strides[i] * v * type_size();
         i++;
     }
 
-    std::vector<size_t> new_shape(shape.begin() + i, shape.end());
-    return Tensor(new_data, new_shape);
+    Shape new_shape;
+    new_shape.ndim = ndim - i;
+    for (uint8_t j = 0; j < new_shape.ndim; j++) {
+        new_shape.dims[j] = shape[i + j];
+    }
+    return make_tensor(new_data, dtype, new_shape, scales);
 }
 
-template<>
-float Tensor<float>::max(){
-    float result = data[0];
-    for (int i=0; i<numel; i++){
-        result = std::max(result, data[i]);
+// View the same data with a different shape; numel must match.
+Tensor Tensor::reshape(std::initializer_list<size_t> new_dims) const {
+    Shape new_shape = Shape::from_dims(new_dims);
+    size_t new_numel = numel_from_shape(new_shape);
+    assert(new_numel == numel && "Reshape size mismatch");
+    return make_tensor(data, dtype, new_shape, scales);
+}
+
+// Shrink a 1-D view to its first len elements.
+Tensor Tensor::view_prefix(size_t len) const {
+    assert(ndim == 1);
+    assert(len <= shape[0]);
+    Shape new_shape = Shape::from_dims({len});
+    return make_tensor(data, dtype, new_shape, scales);
+}
+
+// Shrink the leading dimension of a 2-D+ view to rows rows.
+Tensor Tensor::view_rows(size_t rows) const {
+    assert(ndim >= 2);
+    assert(rows <= shape[0]);
+    Shape new_shape;
+    new_shape.ndim = ndim;
+    new_shape.dims[0] = rows;
+    for (uint8_t i = 1; i < ndim; i++) {
+        new_shape.dims[i] = shape[i];
+    }
+    size_t new_numel = rows;
+    for (uint8_t i = 1; i < ndim; i++) {
+        new_numel *= shape[i];
+    }
+    Tensor t = make_tensor(data, dtype, new_shape, scales);
+    t.numel = new_numel;
+    return t;
+}
+
+// Maximum element value; F32 only.
+float Tensor::max() const {
+    assert(dtype == DType::F32);
+    float result = f32()[0];
+    for (size_t i = 1; i < numel; i++) {
+        result = std::max(result, f32()[i]);
     }
     return result;
 }
 
-template <typename T>
-Tensor<T> Tensor<T>::reshape(std::vector<size_t> new_shape) {
-    size_t new_numel = 1;
-    for (auto d : new_shape) new_numel *= d;
-    assert(new_numel <= numel && "Reshape size mismatch");
-    return Tensor(data, new_shape);
+// Read element i as F32, converting from the stored dtype if needed.
+float Tensor::get(size_t i) const {
+    switch (dtype) {
+        case DType::F32:
+            return f32()[i];
+        case DType::F16:
+            return static_cast<float>(f16()[i]);
+        case DType::INT8:
+            assert(false && "INT8 dequant is done in kernels");
+            return 0.f;
+    }
+    return 0.f;
 }
-
-template<>
-float Tensor<float>::get(size_t i) const{
-    return data[i];
-}
-
-template<>
-float Tensor<int8_t>::get(size_t i) const{
-    return data[i] / scales[scales.size() * i / numel];
-}
-
-template<>
-float Tensor<fp16_t>::get(size_t i) const{
-    return fp16_to_f32(data[i]);
-}
-
-
-template class Tensor<float>;
-template class Tensor<signed char>;
-template class Tensor<fp16_t>;

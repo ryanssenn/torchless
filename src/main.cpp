@@ -1,170 +1,12 @@
 #include <iostream>
-#include "common/fp16.h"
-#include "loader/model_load.h"
-#include "model/modules.h"
-#include <random>
-#include <chrono>
-#include <cmath>
 #include <string>
 #include <vector>
-#include <unordered_set>
 
-std::random_device rd;
-std::mt19937 gen(rd());
-std::uniform_real_distribution<double> distr(0.0, 1.0);
-
-static constexpr float REPETITION_PENALTY = 1.15f;
-
-uint64_t get_timestamp_ms() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-}
-
-void apply_repetition_penalty(InferenceState& infer, const std::vector<uint32_t>& history) {
-    std::unordered_set<uint32_t> seen;
-    for (uint32_t token_id : history) {
-        if (!seen.insert(token_id).second) {
-            continue;
-        }
-        float& logit = infer.logits.data[token_id];
-        if (logit > 0.0f) {
-            logit /= REPETITION_PENALTY;
-        } else {
-            logit *= REPETITION_PENALTY;
-        }
-    }
-}
-
-uint32_t sample_max(InferenceState& infer){
-    float max_val = infer.logits.data[0];
-    size_t res = 0;
-    for (size_t i = 0;i < infer.config.vocab_size; i++){
-        if (infer.logits.data[i] > max_val){
-            res = i;
-            max_val = infer.logits.data[i];
-        }
-    }
-
-    return res;
-}
-
-uint32_t sample_multinomial(InferenceState& infer, float temp){
-    if (temp <= 0) {
-        return sample_max(infer);
-    }
-
-    for (int i=0; i<infer.logits.numel; i++) {
-        infer.probs.data[i] = infer.logits.data[i] / temp;
-    }
-    softmax(infer.probs, infer.probs);
-
-    float r = distr(gen);
-    float total = 0;
-
-    for (int i=0; i<infer.probs.numel; i++){
-        total += infer.probs.data[i];
-        if (total >= r){
-            return i;
-        }
-    }
-    return infer.probs.numel - 1;
-}
-
-template <typename TMatmul, typename TAux>
-uint32_t generate(
-    Model<TMatmul, TAux>& model,
-    InferenceState& infer,
-    size_t token,
-    float temp,
-    std::vector<uint32_t>& history
-){
-    model.forward(infer, token);
-    apply_repetition_penalty(infer, history);
-
-    if (temp <= 0) {
-        return sample_max(infer);
-    }
-    return sample_multinomial(infer, temp);
-}
-
-template <typename TMatmul, typename TAux>
-void run_inference(std::shared_ptr<ModelLoad> params, InferenceState& infer, const std::vector<uint32_t>& got, float temp) {
-    Model<TMatmul, TAux> model(params);
-    RotaryEmbedding::init_freq(infer, params->config);
-
-    for (int i=0; i<(int)got.size()-1; i++){
-        model.forward(infer, got[i]);
-    }
-
-    uint64_t start_time = get_timestamp_ms();
-
-    uint32_t t = got[got.size()-1];
-    int i = 0;
-
-    std::vector<uint32_t> history = got;
-    
-    // Get EOS token ID (</s> for Mistral), fallback to 2 if not found
-    uint32_t eos_token_id = 2;  // Default fallback
-    auto eos_it = params->tokenizer.token_to_id.find("</s>");
-    if (eos_it != params->tokenizer.token_to_id.end()) {
-        eos_token_id = eos_it->second;
-    }
-
-    std::cout << std::endl;
-
-    for (;i<70;i++){
-        t = generate(model, infer, t, temp, history);
-        history.push_back(t);
-
-        if (t == eos_token_id){
-            break;
-        }
-
-        std::cout << params->tokenizer.decode({t}) << std::flush;
-    }
-
-    std::cout << std::endl;
-
-    uint64_t end_time = get_timestamp_ms();
-
-    std::cout << "throughput: " << (i+1) / ((end_time - start_time) / 1000.0) << " tok/s" << std::endl;
-}
-
-// Teacher-forced perplexity over the prompt tokens using the actual engine.
-// PPL = exp( mean_i -log softmax(logits_i)[token_{i+1}] ).
-template <typename TMatmul, typename TAux>
-void run_perplexity(std::shared_ptr<ModelLoad> params, InferenceState& infer, const std::vector<uint32_t>& tokens) {
-    Model<TMatmul, TAux> model(params);
-    RotaryEmbedding::init_freq(infer, params->config);
-    infer.pos = 0;
-
-    double nll = 0.0;
-    size_t count = 0;
-    std::vector<double> per_token_nll;
-
-    for (size_t i = 0; i + 1 < tokens.size(); i++) {
-        model.forward(infer, tokens[i]);
-
-        for (size_t j = 0; j < infer.logits.numel; j++) {
-            infer.probs.data[j] = infer.logits.data[j];
-        }
-        softmax(infer.probs, infer.probs);
-
-        double logp = std::log(std::max((double)infer.probs.data[tokens[i + 1]], 1e-30));
-        nll += -logp;
-        per_token_nll.push_back(-logp);
-        count++;
-    }
-
-    std::cout << "token_ids:";
-    for (uint32_t id : tokens) std::cout << " " << id;
-    std::cout << std::endl;
-    std::cout << "per_token_nll:";
-    for (double v : per_token_nll) std::cout << " " << v;
-    std::cout << std::endl;
-    std::cout << "tokens: " << tokens.size() << std::endl;
-    std::cout << "perplexity: " << std::exp(nll / count) << std::endl;
-}
+#include "loader/model_load.h"
+#include "model/inference_state.h"
+#include "model/model.h"
+#include "decode/sampling.h"
+#include "eval/perplexity.h"
 
 int main(int argc, char** argv) {
     float temp = 0.0f;
@@ -172,7 +14,7 @@ int main(int argc, char** argv) {
     std::vector<std::string> positional;
 
     for (int i = 1; i < argc; i++) {
-        std::string arg = argv[i];
+        const std::string arg = argv[i];
         if (arg == "--temp" && i + 1 < argc) {
             temp = std::stof(argv[++i]);
         } else if (arg == "--ppl") {
@@ -183,39 +25,36 @@ int main(int argc, char** argv) {
     }
 
     if (positional.size() < 2) {
-        std::cerr << "Usage: " << argv[0] << " <model_path> <prompt> [--temp TEMP]" << std::endl;
-        std::cerr << "  --temp  Sampling temperature. 0 = greedy (default). Try 0.7 for less repetition." << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <model_path> <prompt> [--temp TEMP] [--ppl]\n"
+                  << "  --temp  Sampling temperature. 0 = greedy (default).\n"
+                  << "  --ppl   Teacher-forced perplexity over the prompt.\n";
         return 1;
     }
 
-    std::string model_path = positional[0];
-    std::string text = positional[1];
+    auto params = std::make_shared<ModelLoad>();
+    params->load(positional[0]);
+    auto tokens = params->tokenizer.encode(positional[1]);
 
-    std::shared_ptr<ModelLoad> params = std::make_shared<ModelLoad>();
-    params->load(model_path);
-
-    InferenceState infer(params->config);
-    std::vector<uint32_t> got = params->tokenizer.encode(text);
+    InferenceState state(params->config);
 
     if (ppl) {
-        if (params->config.quant == "f32") {
-            run_perplexity<float, float>(params, infer, got);
-        } else {
-            std::cerr << "unsupported quant for perplexity: " << params->config.quant << std::endl;
-            return 1;
-        }
+        run_perplexity(params, state, tokens);
         return 0;
     }
 
-    if (params->config.quant == "f32") {
-        run_inference<float, float>(params, infer, got, temp);
-    } else if (is_f16(params->config.quant)) {
-        std::cerr << "f16 inference not yet implemented" << std::endl;
-        return 1;
-    } else {
-        std::cerr << "unsupported quant: " << params->config.quant << std::endl;
-        return 1;
+    Model model(params);
+
+    for (size_t step = 0; step < tokens.size(); step++) {
+        model.forward(state, tokens[step]);
     }
 
+    for (int i = 0; i < 32; i++) {
+        uint32_t next = temp <= 0.0f ? sample_max(state) : sample_multinomial(state, temp);
+        std::cout << params->tokenizer.decode({next});
+        std::cout.flush();
+        if (next == params->config.eos_token_id) break;
+        model.forward(state, next);
+    }
+    std::cout << "\n";
     return 0;
 }

@@ -1,20 +1,13 @@
 #pragma once
 
-#include "common/fp16.h"
 #include "common/tensor.h"
-#include <cmath>
 
-template <typename WeightT, typename ActivationT, typename AccumT>
-void matmul(Tensor<AccumT>& xout, Tensor<WeightT>& w, Tensor<ActivationT>& x);
-void row_matmul(Tensor<float>& xout, Tensor<float>& x, Tensor<float>& w);
-void row_matmul(Tensor<float>& xout, Tensor<float>& x, Tensor<fp16_t>& w);
+void matmul(Tensor& xout, const Tensor& w, const Tensor& x);
+void row_matmul(Tensor& xout, const Tensor& x, const Tensor& w);
 
-void softmax(Tensor<float>& xout, Tensor<float>& x);
-void rope(Tensor<float>& xout, Tensor<float>& x, Tensor<float>& cos, Tensor<float>& sin);
-
-void silu(Tensor<float>& xout, Tensor<float>& x);
-
-void add(Tensor<float>& xout, Tensor<float>& x, Tensor<float>& y);
-
-void mul(Tensor<float>& xout, Tensor<float>& x, Tensor<float>& y);
-void mul(Tensor<float>& xout, Tensor<float>& x, float c);
+void softmax(Tensor& xout, const Tensor& x);
+void rope(Tensor& xout, const Tensor& x, const Tensor& cos, const Tensor& sin);
+void silu(Tensor& xout, const Tensor& x);
+void add(Tensor& xout, const Tensor& x, const Tensor& y);
+void mul(Tensor& xout, const Tensor& x, const Tensor& y);
+void mul(Tensor& xout, const Tensor& x, float c);
